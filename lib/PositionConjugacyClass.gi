@@ -131,7 +131,8 @@ end;
 # for permutation groups: cycle structures on orbits of points
 CCInvFuncs.CycStruct := function(r, tree)
   local o, fu;
-  o := Orbits(r.G, MovedPoints(r.G));
+  # these are the orbits on moved points
+  o := Orbits(r.G);
   if Length(o) = 1 then
     fu := function(r, x)
       return CycleStructurePerm(x);

@@ -36,7 +36,8 @@ InstallMethod(NaturalCharacters, ["IsPermGroup"], function(G)
   t := CharacterTable(G);
   cls := ConjugacyClasses(G){IdentificationOfConjugacyClasses(t)};
   reps := List(cls, Representative);
-  orb := Orbits(G, MovedPoints(G));
+  # orbits on moved points
+  orb := Orbits(G);
   res := [];
   for o in orb do
     # permutation character on o minus 1
