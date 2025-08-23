@@ -254,6 +254,7 @@ function(UT)
         ExtendGramUTable(UT);
         ReduceUTable(UT);
         if Length(UT!.ichars) = ncl then
+          Sort(UT!.ichars);
           return UT!.ichars;
         fi;
       fi;
@@ -269,6 +270,7 @@ function(UT)
       ExtendGramUTable(UT);
       ReduceUTable(UT);
       if Length(UT!.ichars) = ncl then
+        Sort(UT!.ichars);
         return UT!.ichars;
       fi;
     fi;
