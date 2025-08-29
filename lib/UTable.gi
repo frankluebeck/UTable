@@ -273,8 +273,8 @@ function(UT)
   fi;
 
   # Reduce these
-  ExtendGramUTable(UT);
-  ReduceUTable(UT);
+##    ExtendGramUTable(UT);
+##    ReduceUTable(UT);
 
   # induce from all (maximal) cyclic subgroups
   mc := MaximalCyclics(G);

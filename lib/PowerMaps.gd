@@ -9,6 +9,8 @@
 
 DeclareAttribute("PowerMapsOfAllClasses", IsGroup);
 
+DeclareAttribute("RationalClassSets", IsGroup);
+
 DeclareAttribute("MaximalCyclics", IsGroup);
 
 DeclareGlobalName("InduceAllFromCyclicSubgroup");
