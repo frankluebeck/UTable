@@ -86,8 +86,10 @@ CCInvFuncs.ConjTest := function(r, tree)
     local l, i;
     l := tree[1];
     for i in [1..Length(l)-1] do
-      if x = r.reps[l[i]] or x in r.classes[l[i]] then
-        return l[i];
+      if not l[i] in r.exclude then
+        if x = r.reps[l[i]] or x in r.classes[l[i]] then
+          return l[i];
+        fi;
       fi;
     od;
     return l[Length(l)];
@@ -185,9 +187,16 @@ BindGlobal("ConjugacyClassInvariants", function(G, args...)
 end);
 
 # applying this is easy:
-BindGlobal("PositionConjugacyClass", function(G, x)
+# optionally, a list of class indices can be given which can be excluded
+# from the context of the application
+BindGlobal("PositionConjugacyClass", function(G, x, exclude...)
   local r, tree, inv, pos;
   r := ConjugacyClassInvariants(G);
+  if Length(exclude) > 0 then
+    r.exclude := exclude[1];
+  else
+    r.exclude := [];
+  fi;
   tree := r.tree;
   while IsList(tree) do
     inv := tree[2](r, x);

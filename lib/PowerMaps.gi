@@ -140,6 +140,150 @@ InstallMethod(PowerMapsOfAllClasses, ["IsGroup"], function(G)
 
   return res;
 end);
+InstallMethod(PowerMapsOfAllClasses, ["IsGroup"], function(G)
+  local cls, reps, ords, sords, perm, res, o, ps, gens, s, orb, 
+        trans, stab, ostab, ng, g, og, trg, orbg, excl, m, pos, 
+        x, y, xo, norb, ntrans, t, map, k, mapk, i, l, e, j, p;
+  cls := ConjugacyClasses(G);
+  reps := List(cls, Representative);
+  ords := List(reps, Order);
+  sords := ShallowCopy(ords);
+  perm := [1..Length(cls)];
+  SortParallel(sords, perm);
+
+  res := [];
+  # we start with small orders
+  for i in perm do
+    if not IsBound(res[i]) then
+      o := ords[i];
+      if o = 1 then
+        res[i] := [i];
+        continue;
+      fi;
+      ps := Set(Factors(o));
+
+      # first the rational class of reps[i] 
+      gens := Flat(GeneratorsPrimeResidues(o).generators);
+      # order of group and found subgroup of stabilizer
+      s := Phi(o);
+      # start the orbit, stabilizer and transversal
+      orb := [i];
+      trans := [1];
+      stab := BlistList([1..o], [1]);
+      ostab := 1;
+      ng := 0;
+      # now we extend this generator wise
+      while Length(orb)*ostab < s do
+        ng := ng+1;
+        g := gens[ng];
+        og := OrderMod(g, o);
+        # orbit of this generator on the start point
+        # until we reach a known point
+        trg := [1];
+        orbg := [i];
+        for k in [1..og] do
+          # we can exclude some classes as next image
+          if og mod k = 0 then
+            # next point cannot be in current g-orbit, except start point
+            excl := orbg{[2..Length(orbg)]};
+            m := PositionConjugacyClass(G, reps[orbg[k]]^g, excl);
+            pos := Position(orb, m);
+            if pos = fail then
+              # found new class
+              Add(orbg, m);
+              Add(trg, trg[k]*g mod o);
+            else
+              # found class in orbit of the previous generators
+              # and so an element in stabilizer of i
+              x := (trans[pos] * g^-k) mod o;
+              y := x;
+              xo := 1;
+              while not stab[y] do
+                y := (y*x) mod o;
+                xo := xo+1;
+              od;
+              for l in [1..o] do
+                if stab[l] then
+                  y := (l*x) mod o;
+                  for e in [1..xo-1] do
+                    stab[y] := true;
+                    y := (y*x) mod o;
+                  od;
+                fi;
+              od;
+              ostab := ostab*xo;
+              # Now we know the full orbit of the subgroup of the generators
+              # considered so far. We leave this loop and write them down
+              # afterwards.
+              break;
+            fi;
+          else
+            # next point is certainly not yet known
+            excl := Concatenation(orb,orbg);
+            x := PositionConjugacyClass(G, reps[orbg[k]]^g, excl);
+            Add(orbg, x);
+            Add(trg, trg[k]*g mod o);
+          fi;
+        od;
+        # we get the new elements in the orbit by applying the
+        # non-trivial elements in trg to those in orb
+        norb := [];
+        ntrans := [];
+        excl := Concatenation(orb, orbg);
+        for j in [2..Length(orbg)] do
+          Add(norb, orbg[j]);
+          t := trg[j];
+          Add(ntrans, t);
+          for m in [2..Length(orb)] do
+            # we know to get a new class
+            x := PositionConjugacyClass(G, reps[orb[m]]^t, excl);
+            Add(norb, x);
+            Add(ntrans, (trans[m]*t) mod o);
+            Add(excl, x);
+          od;
+        od;
+        Append(orb, norb);
+        Append(trans, ntrans);
+      od;
+      map := [];
+      map[o] := perm[1];
+      for j in [1..o] do
+        if stab[j] then
+          for k in [1..Length(orb)] do
+            map[(j*trans[k]) mod o] := orb[k];
+          od;
+        fi;
+      od;
+
+      # the rest we get from smaller order classes (already done)
+      for p in ps do
+        k := o/p;
+        pos := PositionConjugacyClass(G, reps[i]^p);
+        mapk := res[pos];
+        for j in [1..k-1] do
+          map[(p*j) mod o] := mapk[j];
+        od;
+      od;
+      res[i] := map;
+
+      # and we get the maps for the other classes in the same rational class
+      for j in [2..Length(orb)] do
+        mapk := [];
+        for k in [1..o-1] do
+          mapk[k] := map[(trans[j]*k) mod o];
+        od;
+        mapk[o] := perm[1];
+        res[orb[j]] := mapk;
+      od;
+    fi;
+  od;
+
+  # so far we have in res[i][k] the class of reps[i]^k,
+  # now we shift it to reps[i]^(k-1), so that the trivial class comes first
+  res := List(res, a-> Concatenation([a[Length(a)]],a{[1..Length(a)-1]}));
+
+  return res;
+end);
 
 
 # all induced characters of linear characters of the cyclic group
