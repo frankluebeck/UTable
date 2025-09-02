@@ -9,8 +9,8 @@ SetPackageInfo( rec(
 
 PackageName := "UTable",
 Subtitle := "Constructing character tables with Unger's algorithm",
-Version := "0.1",
-Date := "22/08/2025", # dd/mm/yyyy format
+Version := "0.2.dev",
+Date := "02/09/2025", # dd/mm/yyyy format
 License := "GPL-3.0-or-later",
 
 Persons := [
