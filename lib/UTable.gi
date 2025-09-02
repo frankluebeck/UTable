@@ -75,11 +75,12 @@ InstallOtherMethod(SizesConjugacyClasses, ["IsUTable"],
 ##  Note: only rational linear combinations of irreducibles can be handled
 ##  here, not arbitrary class functions!
 BindGlobal("ImportToUTable", function(UT, l)
-  local ind, len, t, idc, ch, c, ic;
+  local rci, ind, len, t, idc, ch, c, v, r, co, pol, cc, s, i, j, ic;
   if Length(l) = 0 then
     return;
   fi;
-  ind := RationalClassIndices(UT);
+  rci := RationalClassesInfo(UT);
+  ind := List(rci, a-> a.classes[1]);
   len := Length(ind);
   for ch in l do
     if HasUnderlyingCharacterTable(ch) then
@@ -93,16 +94,41 @@ BindGlobal("ImportToUTable", function(UT, l)
     if Length(ch) <> len then
       ch := ch{ind};
     fi;
+    v := [];
+    for i in [1..len] do
+      r := rci[i];
+      co := r.conductor;
+      if co = 1 then
+        Add(v, ch[i]);
+      else
+        if IsRat(ch[i]) then
+          Add(v, ch[i]);
+          for j in [2..r.dim] do
+            Add(v, 0);
+          od;
+        else
+          pol := r.cpol;
+          cc := CoeffsCyc(ch[i], co);
+          s := ReduceCoeffs(cc, pol);
+          for j in [1..s] do
+            Add(v,cc[j]);
+          od;
+          for j in [s+1..r.dim] do
+            Add(v, 0);
+          od;
+        fi;
+      fi;
+    od;
     # reduce with known irreducibles
     for ic in UT!.ichars do
-      c := ScalarProduct(UT, ch, ic);
+      c := ScalarProduct(UT, v, ic);
       if c <> 0 then
-        ch := ch - c * ic;
+        v := v - c * ic;
       fi;
     od;
 
-    if not (IsZero(ch) or ch in UT!.ochars or ch in UT!.nchars) then
-      Add(UT!.nchars, ch);
+    if not (IsZero(v) or v in UT!.ochars or v in UT!.nchars) then
+      Add(UT!.nchars, v);
     fi;
   od;
 end);
@@ -231,6 +257,28 @@ BindGlobal("DeterminantGramUTable", function(UT)
   return DeterminantIntMat(g);
 end);
 
+UTAddTrivialCharacter := function(UT)
+  local rci, v, r;
+  rci := RationalClassesInfo(UT);
+  v := [];
+  for r in rci do
+    if r.conductor = 1 then
+      Add(v, 1);
+    else
+      Append(v, 0*r.ind);
+      v[r.ind[1]] := 1;
+    fi;
+  od;
+  if not v in UT!.ichars then
+    if Length(UT!.nchars) = 0 and Length(UT!.ochars) = 0 then
+      Add(UT!.ichars, v);
+    else
+      Add(UT!.nchars, v);
+    fi;
+  fi;
+end;
+
+
 # The main automatic function.
 # Can be called from the start or after adding characters by hand.
 InstallOtherMethod(Irr, ["IsUTable"], 
@@ -255,10 +303,11 @@ function(UT)
   # Add trivial and natural characters
   if not IsBound(UT!.naturaldone) then
     Info(InfoUTable, 1, "Trivial and natural characters");
-    v := 1+0*[1..len];
-    if not v in UT!.ichars then
-      Add(UT!.ichars, v);
-    fi;
+##      v := 1+0*[1..len];
+##      if not v in UT!.ichars then
+##        Add(UT!.ichars, v);
+##      fi;
+    UTAddTrivialCharacter(UT);
 
     l := NaturalCharacters(G);
     ImportToUTable(UT, l);
