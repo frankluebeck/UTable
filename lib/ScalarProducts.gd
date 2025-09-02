@@ -15,4 +15,9 @@ DeclareGlobalName("RatPartVec");
 DeclareAttribute("RatClassExps", IsGroup);
 DeclareAttribute("RatClassExps", IsNearlyCharacterTable);
       
+DeclareAttribute("RationalClassesInfo", IsGroup);    
+DeclareAttribute("RationalClassesInfo", IsNearlyCharacterTable);    
+DeclareAttribute("ScalarInfo", IsGroup);    
+DeclareAttribute("ScalarInfo", IsUTable);    
+
     
