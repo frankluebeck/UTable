@@ -1,0 +1,28 @@
+#!/bin/sh
+# (C) Frank Lübeck     2025
+# configure script for UTable with GAP > 4.14 (different build system for GAP)
+
+# some tools on OS X made locale related problems, so:
+export LANG=C
+export LC_ALL=C
+
+# GAP path
+GAPPATH=../..
+while test "$#" -ge 1 ; do
+  option="$1" ; shift
+  case "$option" in
+    --with-gaproot=*) GAPPATH=${option#--with-gaproot=}; ;;
+    -*)               echo "ERROR: unsupported argument $option" ; exit 1;;
+    *)                GAPPATH="$option" ;;
+  esac
+done
+echo "Using $GAPPATH as GAP build directory."
+
+# Reading variables from GAP build directory
+. "$GAPPATH/sysinfo.gap"
+
+echo "Using bin path: $GAParch"
+
+# Creating Makefile
+sed -e "s|@GAPPATH@|$GAPPATH|g" < Makefile.in > Makefile
+
