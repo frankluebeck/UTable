@@ -106,11 +106,13 @@ BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
   cen := StabilizerOfExternalSet(cl);
   # p-part
   s := SylowSubgroup(cen, p);
+  IsPGroup(s);
   ss := Size(s);
   if "linear" in opts then
     t := LinearCharacters(s);
   else
-    t := Irr(s);
+    # in which cases it may be sensible to move to PcGroup?
+    t := IrrBaumClausen(s);
     if "nonlinear" in opts then
       t := Filtered(t, ch-> Degree(ch) > 1);
     fi;
