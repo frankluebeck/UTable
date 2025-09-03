@@ -368,7 +368,7 @@ BindGlobal("InducedFromAllMaximalCyclicSubgroups", function(G)
   for i in MaximalCyclics(G) do
     Append(res, InduceAllFromCyclicSubgroup(G, i));
   od;
-  return res;
+  return Set(res);
 end);
 
 # returns list of lists where each entry is the list of positions of the
