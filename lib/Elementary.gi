@@ -79,14 +79,10 @@ end);
 ##  with optional argument "linear" only the linear characters are induced
 ##  with optional argument "nonlinear" only the nonlinear characters are induced
 ##  
-##  characters are returned as list of values
-##      if first argument is group G the ordering is as in ConjugacyClasses(G)
-##      if first argument is UTable(G) only values on representatives of 
-##          rational classes are given (first of each entry in 
-##          RationalClassSets(G))
+##  characters are returned as list of values in Ordering of ConjugacyClasses(G)
 BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
-  local G, ut, scen, cls, ncl, store, inds, cl, x, o, cen, s, ss, t, scl, 
-        sscl, fus, pms, lt, res, c, m, efus, a, e, j, l, k, ch, len;
+  local G, ut, scen, cls, ncl, cl, x, o, cen, s, ss, t, scl, sscl, 
+        fus, pms, lt, res, c, m, efus, e, j, l, k, ch, a;
   if IsGroup(GorUT) then
     G := GorUT;
     ut := UTable(G);
@@ -102,16 +98,6 @@ BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
   ncl := Length(cls);
 
   # if arg is UTable we store only values on reps of rational classes
-  if IsUTable(GorUT) then
-    inds := RationalClassIndices(ut);
-    len := Length(inds);
-    store := ListWithIdenticalEntries(ncl, fail);
-    store{inds} := [1..len];
-  else
-    store := [1..ncl];
-    inds := store;
-    len := ncl;
-  fi;
   cl := cls[i];
   # generator of cyclic part
   x := Representative(cl);
@@ -139,7 +125,7 @@ BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
 
   # we use the character table of <x> x s without writing it down
   lt := Length(t);
-  res := List([1..lt*o], i-> 0*[1..len]);
+  res := List([1..lt*o], i-> 0*[1..ncl]);
   c := E(o);
   for e in [0..o-1] do
     # m such that (x y)^m = x^e y
@@ -148,10 +134,8 @@ BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
     for j in [1..Length(fus)] do
       for l in [0..o-1] do
         for k in [1..lt] do
-          a := store[efus[j]];
-          if a <> fail then
-            res[l*lt+k][a] := res[l*lt+k][a] + c^(e*l)*t[k][j]*sscl[j];
-          fi;
+          a := efus[j];
+          res[l*lt+k][a] := res[l*lt+k][a] + c^(e*l)*t[k][j]*sscl[j];
         od;
       od;
     od;
@@ -159,8 +143,8 @@ BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
   # some induced characters can be the same
   res := Set(res);
   # finally the factor coming from class lengths in G
-  for j in [1..len] do
-    c := scen[inds[j]]/ss/o;
+  for j in [1..ncl] do
+    c := scen[j]/ss/o;
     for ch in res do
       if not ch[j] = 0 then
         ch[j] := c*ch[j];
