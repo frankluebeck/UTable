@@ -67,8 +67,7 @@ InstallOtherMethod(SizesConjugacyClasses, ["IsUTable"],
 
 
 ##  importing generalized characters on all classes (ordered as in G)
-##  or from character table of G
-##  or values on RationalClassIndices(UT), they are added to
+##  or from character table of G, they are added to
 ##  the list of new characters UT!.nchars after subtracting the projection
 ##  on the space of already known irreducibles
 ##  
@@ -91,9 +90,7 @@ BindGlobal("ImportToUTable", function(UT, l)
       c{idc} := ch;
       ch := c;
     fi;
-    if Length(ch) <> len then
-      ch := ch{ind};
-    fi;
+    ch := ch{ind};
     v := [];
     for i in [1..len] do
       r := rci[i];
@@ -132,6 +129,52 @@ BindGlobal("ImportToUTable", function(UT, l)
     fi;
   od;
 end);
+# Converse of import:
+# l can be a list of integer vectors in the format of characters in UT,
+# or a list of integers meaning UT!.ichars{l}.
+# Without argument l all characters in UT!.ichars will be expanded.
+BindGlobal("ExpandFromUTable", function(UT, li...)
+  local rci, res, v, c, x, vals, l, r, i;
+  if Length(li) > 0 then
+    li := li[1];
+    if li=[] then
+      return [];
+    fi;
+    if IsList(li) and IsInt(li[1]) then
+      li := UT!.ichars{li};
+    fi;
+  else
+    li := UT!.ichars;
+  fi;
+  rci := RationalClassesInfo(UT);
+  res := [];
+  
+  for l in li do
+    v := [];
+    for r in rci do
+      c := r.conductor;
+      if c = 1 then
+        v[r.classes[1]] := l[r.ind];
+      else
+        x := l{r.ind};
+        while Length(x)<c do
+          Add(x, 0);
+        od;
+        x := CycList(x);
+        vals := [x];
+        for i in [3..Length(r.exponents)] do
+          Add(vals, GaloisCyc(x, r.exponents[i]));
+        od;
+        v{r.classes} := vals;
+      fi;
+    od;
+    Add(res, v);
+  od;
+  return res;
+end);
+
+
+
 
 # extend Gram matrix for new characters in UT!.nchars
 # and move those characters to UT!.ochars
@@ -161,7 +204,7 @@ BindGlobal("ReduceUTable", function(UT, delta...)
   if Length(delta) > 0 then
     delta := delta[1];
   else
-    delta := 9/10;
+    delta := 3/4;
   fi;
   lll := LLLReducedGramMat(UT!.gram, delta);
   UT!.gram := lll.remainder;
@@ -257,28 +300,6 @@ BindGlobal("DeterminantGramUTable", function(UT)
   return DeterminantIntMat(g);
 end);
 
-UTAddTrivialCharacter := function(UT)
-  local rci, v, r;
-  rci := RationalClassesInfo(UT);
-  v := [];
-  for r in rci do
-    if r.conductor = 1 then
-      Add(v, 1);
-    else
-      Append(v, 0*r.ind);
-      v[r.ind[1]] := 1;
-    fi;
-  od;
-  if not v in UT!.ichars then
-    if Length(UT!.nchars) = 0 and Length(UT!.ochars) = 0 then
-      Add(UT!.ichars, v);
-    else
-      Add(UT!.nchars, v);
-    fi;
-  fi;
-end;
-
-
 # The main automatic function.
 # Can be called from the start or after adding characters by hand.
 InstallOtherMethod(Irr, ["IsUTable"], 
@@ -300,44 +321,28 @@ function(UT)
     return res;
   end;
 
-  # Add trivial and natural characters
-  if not IsBound(UT!.naturaldone) then
-    Info(InfoUTable, 1, "Trivial and natural characters");
-##      v := 1+0*[1..len];
-##      if not v in UT!.ichars then
-##        Add(UT!.ichars, v);
-##      fi;
-    UTAddTrivialCharacter(UT);
-
-    l := NaturalCharacters(G);
-    ImportToUTable(UT, l);
-    UT!.naturaldone := true;
-  fi;
-
-  # And some cheap characters from power maps
-  if not IsBound(UT!.pmchars) then
-    Info(InfoUTable, 1, "Cheap characters from power maps");
-    l := SmallPowerMapCharacters(G);
-    ImportToUTable(UT, l);
-  fi;
-
-  # Reduce these
-##    ExtendGramUTable(UT);
-##    ReduceUTable(UT);
 
   # induce from all (maximal) cyclic subgroups
-  mc := MaximalCyclics(G);
-  if not IsBound(UT!.mcdone) then
-    UT!.mcdone := [];
-  fi;
-  for i in mc do
-    if not i in UT!.mcdone then
-      Info(InfoUTable, 1, "Induce from maximal cyclic ", i, " (|g|=", ords[i],")");
-      l := InduceAllFromCyclicSubgroup(UT, i);
-      ImportToUTable(UT, l);
-      AddSet(UT!.mcdone, i);
-    fi;
-  od;
+  Info(InfoUTable, 1, "Induce from maximal cyclic subgroups");
+  ImportToUTable(UT, InducedFromAllMaximalCyclicSubgroups(G));
+  
+  # Note that it is not good to add the trivial character as
+  # irreducible first, because reduction with it will make
+  # sparse induced characters non-sparse.
+  Info(InfoUTable, 1, "Trivial and natural characters");
+  ImportToUTable(UT, [0*[1..ncl]+1]);
+  l := NaturalCharacters(G);
+  ImportToUTable(UT, l);
+
+  ExtendGramUTable(UT);
+  ReduceUTable(UT);
+
+  # And some cheap characters from power maps
+  Info(InfoUTable, 1, "Cheap characters from power maps");
+  l := SmallPowerMapCharacters(G);
+  ImportToUTable(UT, l);
+
+  # Reduce these
   ExtendGramUTable(UT);
   ReduceUTable(UT);
 
