@@ -8,3 +8,9 @@ ReadPackage( "UTable", "lib/PowerMaps.gd");
 ReadPackage( "UTable", "lib/SomeCharacters.gd");
 ReadPackage( "UTable", "lib/Elementary.gd");
 ReadPackage( "UTable", "lib/ScalarProducts.gd");
+
+if (not IsBound(UTScalarProductInternal)) and
+        IsKernelExtensionAvailable("UTable","scalar") then
+  LoadKernelExtension("UTable", "scalar");
+fi;
+
