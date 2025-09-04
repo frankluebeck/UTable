@@ -347,7 +347,7 @@ end;
 if IsBound(UTScalarProductInternal) then
   InstallOtherMethod(ScalarProduct, ["IsUTable", "IsList", "IsList"],
   function(UT, c, d)
-    return UTScalarProductInternal(ScalarInfo(UT), c, d);
+    return UTScalarProductInternal2(ScalarInfo(UT), c, d);
   end);
 else
   InstallOtherMethod(ScalarProduct, ["IsUTable", "IsList", "IsList"],
