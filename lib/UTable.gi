@@ -73,23 +73,32 @@ InstallOtherMethod(SizesConjugacyClasses, ["IsUTable"],
 ##  
 ##  Note: only rational linear combinations of irreducibles can be handled
 ##  here, not arbitrary class functions!
-BindGlobal("ImportToUTable", function(UT, l)
-  local rci, ind, len, t, idc, ch, c, v, r, co, pol, cc, s, i, j, ic;
-  if Length(l) = 0 then
-    return;
-  fi;
+
+# First a separate function to encode a characters as integer vector;
+# each character can be a list of values (in the ordering of the conjugacy 
+# classes of the group) or 
+# a class function object (values in ordering of the
+# IdentificationOfConjugacyClasses of the table, if this is set).
+BindGlobal("EncodeForUTable", function(UT, l)
+  local rci, ind, len, res, t, idc, ch, c, v, r, co, pol, cc, s, i, j;
   rci := RationalClassesInfo(UT);
   ind := List(rci, a-> a.classes[1]);
   len := Length(ind);
+  res := [];
   for ch in l do
     if HasUnderlyingCharacterTable(ch) then
       t := UnderlyingCharacterTable(ch);
-      idc := IdentificationOfConjugacyClasses(t);
-      ch := AsList(ch);
-      c := [];
-      c{idc} := ch;
-      ch := c;
+      if HasIdentificationOfConjugacyClasses(t) then
+        idc := IdentificationOfConjugacyClasses(t);
+        ch := AsList(ch);
+        c := [];
+        c{idc} := ch;
+        ch := c;
+      else
+        ch := AsList(ch);
+      fi;
     fi;
+      
     ch := ch{ind};
     v := [];
     for i in [1..len] do
@@ -116,6 +125,19 @@ BindGlobal("ImportToUTable", function(UT, l)
         fi;
       fi;
     od;
+    Add(res, v);
+  od;
+  return res;
+end);
+
+
+BindGlobal("ImportToUTable", function(UT, l)
+  local vs, c, v, ic;
+  if Length(l) = 0 then
+    return;
+  fi;
+  vs := EncodeForUTable(UT, l);
+  for v in vs do
     # reduce with known irreducibles
     for ic in UT!.ichars do
       c := ScalarProduct(UT, v, ic);
@@ -196,7 +218,7 @@ end);
 # reduce characters in UT!.ochars using LLL
 # move found irreducibles to UT!.ichars
 BindGlobal("ReduceUTable", function(UT, delta...)
-  local lll, nirr, irr, g, len, m, oc, 
+  local ncl, lll, nirr, irr, g, len, m, oc, 
         noc, ch, ng, gg, v, ni, i, j;
   if Length(UT!.gram) = 0 then
     return;
@@ -206,6 +228,7 @@ BindGlobal("ReduceUTable", function(UT, delta...)
   else
     delta := 3/4;
   fi;
+  ncl := NrConjugacyClasses(UT);
   lll := LLLReducedGramMat(UT!.gram, delta);
   UT!.gram := lll.remainder;
   UT!.ochars := lll.transformation * UT!.ochars;
@@ -279,7 +302,7 @@ BindGlobal("ReduceUTable", function(UT, delta...)
       fi;
     od;
   fi;
-  Info(InfoUTable, 1, "|irr| = ",Length(UT!.ichars), " |other| = ",
+  Info(InfoUTable, 1, "|irr| = ",Length(UT!.ichars), "/", ncl,  " |other| = ",
        Length(UT!.ochars), " det(Gram) = ", DeterminantGramUTable(UT));
 end);
 
@@ -336,6 +359,10 @@ function(UT)
 
   ExtendGramUTable(UT);
   ReduceUTable(UT);
+  if Length(UT!.ichars) = ncl then
+    Sort(UT!.ichars);
+    return UT!.ichars;
+  fi;
 
   # And some cheap characters from power maps
   Info(InfoUTable, 1, "Cheap characters from power maps");
@@ -345,6 +372,10 @@ function(UT)
   # Reduce these
   ExtendGramUTable(UT);
   ReduceUTable(UT);
+  if Length(UT!.ichars) = ncl then
+    Sort(UT!.ichars);
+    return UT!.ichars;
+  fi;
 
   # now induce from (maximal) non-cyclic elementary subgroups
   mnc := MaximalNonCyclicElementarySubgroups(G);
