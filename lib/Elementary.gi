@@ -78,10 +78,13 @@ end);
 ##  (given by [i, p] as above) to G
 ##  with optional argument "linear" only the linear characters are induced
 ##  with optional argument "nonlinear" only the nonlinear characters are induced
+##  with an integer max in optional arguments the function returns only the
+##       number of conjugacy classes of the elementary subgroup if
+##       this number is larger than max
 ##  
 ##  characters are returned as list of values in Ordering of ConjugacyClasses(G)
 BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
-  local G, ut, scen, cls, ncl, cl, x, o, cen, s, ss, t, scl, sscl, 
+  local G, ut, max, scen, cls, ncl, cl, x, o, cen, s, ss, t, scl, sscl, 
         fus, pms, lt, res, c, m, efus, e, j, l, k, ch, a;
   if IsGroup(GorUT) then
     G := GorUT;
@@ -93,6 +96,13 @@ BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
     Error("InducedFromElementary: First argument must be group or UTable");
     return;
   fi;
+  k := Filtered(opts, IsInt);
+  if Length(k) > 0 then
+    max := k[1];
+  else
+    max := false;
+  fi;
+
   scen := SizesCentralizers(ut);
   cls := ConjugacyClasses(ut);
   ncl := Length(cls);
@@ -108,6 +118,9 @@ BindGlobal("InducedFromElementary", function(GorUT, i, p, opts...)
   s := SylowSubgroup(cen, p);
   IsPGroup(s);
   ss := Size(s);
+  if IsInt(max) and NrConjugacyClasses(s)*o > max then
+    return NrConjugacyClasses(s)*o;
+  fi;
   if "linear" in opts then
     t := LinearCharacters(s);
   else
