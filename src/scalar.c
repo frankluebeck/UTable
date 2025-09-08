@@ -96,9 +96,9 @@ Obj FuncUTScalarProductInternal2( Obj self, Obj sci, Obj c, Obj d)
   if (LEN_PLIST(d) > max) max = LEN_PLIST(d);
   if (max > lencache-1) {
     lencache = max+10000;
-    csci = (Obj*) realloc((void*)csci, lencache);
-    cc = (Obj*) realloc((void*)cc, lencache);
-    cd = (Obj*) realloc((void*)cd, lencache);
+    csci = (Obj*) realloc((void*)csci, lencache*sizeof(Obj));
+    cc = (Obj*) realloc((void*)cc, lencache*sizeof(Obj));
+    cd = (Obj*) realloc((void*)cd, lencache*sizeof(Obj));
   }
   cachec(c);
   cached(d);
