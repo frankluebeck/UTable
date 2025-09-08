@@ -24,7 +24,7 @@ DeclareAttribute("RationalClassIndices", IsNearlyCharacterTable);
 
 DeclareGlobalName("ImportToUTable");
 DeclareGlobalName("ExpandFromUTable");
-DeclareGlobalName("ExtendGramUTable");
+DeclareGlobalName("ExtendLLLUTable");
 DeclareGlobalName("ReduceUTable");
 DeclareGlobalName("DeterminantGramUTable");
 

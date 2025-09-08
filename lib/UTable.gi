@@ -22,13 +22,15 @@
 
 # create (empty) UTable
 InstallMethod(UTable, ["IsGroup"], function(G)
+  local res;
   # we have lists for characters: i irreducible,
-  # o: others for which gram is computed,
   # n: newly imported or computed characters
-  # gram: Gram matrix of chars in ochar
-  return ObjectifyWithAttributes(rec(ichars := [], ochars := [], 
-                                     nchars := [], gram := []), 
+  # and an LLL record to which we can add new characters and
+  # extract irreducible ones
+  res := ObjectifyWithAttributes(rec(ichars := [], nchars := []), 
                                  UTableType, UnderlyingGroup, G);
+  res!.lll := LLLRecord({v,w}-> ScalarProduct(res, v, w), 9/10);
+  return res;
 end);
 InstallMethod(ViewObj, ["IsUTable"], function(UT)
   Print("UTable( ");
@@ -146,7 +148,7 @@ BindGlobal("ImportToUTable", function(UT, l)
       fi;
     od;
 
-    if not (IsZero(v) or v in UT!.ochars or v in UT!.nchars) then
+    if not (IsZero(v) or v in UT!.lll.vectors or v in UT!.nchars) then
       Add(UT!.nchars, v);
     fi;
   od;
@@ -195,48 +197,49 @@ BindGlobal("ExpandFromUTable", function(UT, li...)
   return res;
 end);
 
-
-
-
-# extend Gram matrix for new characters in UT!.nchars
-# and move those characters to UT!.ochars
-BindGlobal("ExtendGramUTable", function(UT)
-  local ng, nc, c, v, i;
-  ng := [];
+# extend LLL record by new characters in UT!.nchars
+# done in a loop of adding a few new characters, reducing and cleaning 
+# the LLL record (this can avoid the computation of many scalar products)
+BindGlobal("ExtendLLLUTable", function(UT)
+  local k, nc, lll, len, rg;
+  k := 10;
+  # we reduce at most k new characters at a time
   nc := UT!.nchars;
-  for i in [1..Length(nc)] do
-    c := nc[i];
-    v := List(UT!.ochars, d-> ScalarProduct(UT, c, d));
-    Append(v, List([1..i], j-> ScalarProduct(UT, c, nc[j])));
-    Add(ng, v);
+  lll := UT!.lll;
+  len := Length(nc);
+  rg := [1..k];
+  while rg[1] <= len do
+    if rg[Length(rg)] > len then
+      rg := [rg[1]..len];
+    fi;
+    AddVectorsLLLRecord(lll, nc{rg});
+    CleanLLLRecord(lll);
+    rg := [rg[1]+k..rg[1]+(2*k-1)];
   od;
-  Append(UT!.gram, ng);
-  Append(UT!.ochars, nc);
   UT!.nchars := [];
 end);
 
-# reduce characters in UT!.ochars using LLL
-# move found irreducibles to UT!.ichars
+# reduce characters in UT!.lll and
+# move found irreducibles to UT!.ichars, and remove those from the remaining
+# characters
 BindGlobal("ReduceUTable", function(UT, delta...)
   local ncl, lll, nirr, irr, g, len, m, oc, 
         noc, ch, ng, gg, v, ni, i, j;
-  if Length(UT!.gram) = 0 then
-    return;
-  fi;
+  lll := UT!.lll;
   if Length(delta) > 0 then
     delta := delta[1];
   else
-    delta := 3/4;
+    delta := lll.y;
   fi;
   ncl := NrConjugacyClasses(UT);
-  lll := LLLReducedGramMat(UT!.gram, delta);
-  UT!.gram := lll.remainder;
-  UT!.ochars := lll.transformation * UT!.ochars;
+  # reduce and clean
+  ReduceLLLRecord(lll, delta);
+  CleanLLLRecord(lll);
   
   # now check for irreducibles and adjust
   nirr := [];
   irr := [];
-  g := UT!.gram;
+  g := lll.gram;
   len := Length(g);
   for i in [1..len] do
     if g[i][i] = 1 then
@@ -254,8 +257,8 @@ BindGlobal("ReduceUTable", function(UT, delta...)
     fi;
   end;
   if Length(irr) > 0 then
-    oc := UT!.ochars;
-    # new ochars
+    oc := lll.vectors;
+    # new list of vectors
     noc := [];
     for i in nirr do
       ch := oc[i];
@@ -280,7 +283,7 @@ BindGlobal("ReduceUTable", function(UT, delta...)
       od;
       Add(ng, v);
     od;
-    # remove zero characters from ochars and gram
+    # remove zero characters from new characters
     for i in [Length(noc), Length(noc)-1..1] do
       if IsZero(noc[i]) then
         Remove(noc, i);
@@ -292,8 +295,6 @@ BindGlobal("ReduceUTable", function(UT, delta...)
     od;
     # move the new irreducibles (after adjusting sign)
     ni := oc{irr};
-    UT!.ochars := noc;
-    UT!.gram := ng;
     for ch in ni do
       if ch[1] < 0 then
         Add(UT!.ichars, -ch);
@@ -301,33 +302,31 @@ BindGlobal("ReduceUTable", function(UT, delta...)
         Add(UT!.ichars, ch);
       fi;
     od;
+    # reset LLL record
+    lll.vectors := noc;
+    lll.gram := ng;
+    lll.n := Length(ng);
+    lll.kmax := 0;
+    lll.r := 0;
+    lll.mue := [];
+    lll.B := [];
+    lll.H := [];
+    ReduceLLLRecord(lll, delta);
   fi;
   Info(InfoUTable, 1, "|irr| = ",Length(UT!.ichars), "/", ncl,  " |other| = ",
-       Length(UT!.ochars), " det(Gram) = ", DeterminantGramUTable(UT));
+       Length(UT!.lll.vectors), " det(Gram) = ", DeterminantGramUTable(UT));
 end);
 
 # Can be useful information
 BindGlobal("DeterminantGramUTable", function(UT)
-  local g, n, i, j;
-  g := UT!.gram;
-  if Length(g) = 0 then
-    return 1;
-  fi;
-  g := List(g, ShallowCopy);
-  n := Length(g);
-  for i in [1..n-1] do
-    for j in [i+1..n] do
-      g[i][j] := g[j][i];
-    od;
-  od;
-  return DeterminantIntMat(g);
+  return Product(Filtered(UT!.lll.B, c-> c<>0));
 end);
 
 # The main automatic function.
 # Can be called from the start or after adding characters by hand.
 InstallOtherMethod(Irr, ["IsUTable"], 
 function(UT)
-  local G, len, scen, ncl, ords, op, v, l, mc, mnc, g, i, a, j;
+  local G, len, scen, ncl, ords, op, v, l, det, mc, mnc, g, i, a, j;
   G := UnderlyingGroup(UT);
   len := NrRationalClasses(UT);
   scen := SizesCentralizers(UT);
@@ -357,7 +356,7 @@ function(UT)
   l := NaturalCharacters(G);
   ImportToUTable(UT, l);
 
-  ExtendGramUTable(UT);
+  ExtendLLLUTable(UT);
   ReduceUTable(UT);
   if Length(UT!.ichars) = ncl then
     Sort(UT!.ichars);
@@ -370,7 +369,7 @@ function(UT)
   ImportToUTable(UT, l);
 
   # Reduce these
-  ExtendGramUTable(UT);
+  ExtendLLLUTable(UT);
   ReduceUTable(UT);
   if Length(UT!.ichars) = ncl then
     Sort(UT!.ichars);
@@ -381,24 +380,52 @@ function(UT)
   mnc := MaximalNonCyclicElementarySubgroups(G);
   if not IsBound(UT!.mncdone) then
     UT!.mncdone := [];
+    UT!.mncbig := [];
+    UT!.mncbigncl := [];
   fi;
   # first only cases where p is still in determinant of Gram matrix
   # (this is in the index of the lattice found so far)
   for a in mnc do
     if not a in UT!.mncdone then
-      g := List(UT!.gram, ShallowCopy);
-      for i in [1..Length(g)] do
-        for j in [i+1..Length(g)] do
-          g[i][j] := g[j][i];
-        od;
-      od;
-      if Length(g) = 0 or RankMat(Z(a[2])^0 * g) < Length(g) then
-        Info(InfoUTable, 1, "Induce from elementary ", a,
+      det := DeterminantGramUTable(UT);
+      if det mod a[2] = 0 then
+        # avoid excessive number of induced characters
+        l := InducedFromElementary(UT, a[1], a[2], 1000);
+        if IsInt(l) then
+          Info(InfoUTable, 1, "Skipping elementary ",a,
+               " with ",l," conjugacy classes");
+          Add(UT!.mncbig, a);
+          Add(UT!.mncbigncl, l);
+        else
+          Info(InfoUTable, 1, "Induce from elementary ", a,
                 " |C|=",ords[a[1]]," |P|=",op(a[1], a[2]));
-        l := InducedFromElementary(UT, a[1], a[2]);
+          ImportToUTable(UT, l);
+          AddSet(UT!.mncdone, a);
+          ExtendLLLUTable(UT);
+          ReduceUTable(UT);
+          if Length(UT!.ichars) = ncl then
+            Sort(UT!.ichars);
+            return UT!.ichars;
+          fi;
+        fi;
+      fi;
+    fi;
+  od;
+  # if not done the remaining cases with not too many classes
+  for a in mnc do
+    if not a in UT!.mncdone and not a in UT!.mncbig then
+      l := InducedFromElementary(UT, a[1], a[2], 1000);
+      if IsInt(l) then
+        Info(InfoUTable, 1, "Skipping elementary ",a,
+             " with ",l," conjugacy classes");
+        Add(UT!.mncbig, a);
+        Add(UT!.mncbigncl, l);
+      else
+        Info(InfoUTable, 1, "Induce from elementary ", a,
+              " |C|=",ords[a[1]]," |P|=",op(a[1], a[2]));
         ImportToUTable(UT, l);
         AddSet(UT!.mncdone, a);
-        ExtendGramUTable(UT);
+        ExtendLLLUTable(UT);
         ReduceUTable(UT);
         if Length(UT!.ichars) = ncl then
           Sort(UT!.ichars);
@@ -407,31 +434,36 @@ function(UT)
       fi;
     fi;
   od;
-  # if not done the remaining cases
-  for a in mnc do
-    if not a in UT!.mncdone then
-      Info(InfoUTable, 1, "Induce from elementary ", a,
-              " |C|=",ords[a[1]]," |P|=",op(a[1], a[2]));
-      l := InducedFromElementary(UT, a[1], a[2]);
-      ImportToUTable(UT, l);
-      AddSet(UT!.mncdone, a);
-      ExtendGramUTable(UT);
-      ReduceUTable(UT);
-      if Length(UT!.ichars) = ncl then
-        Sort(UT!.ichars);
-        return UT!.ichars;
-      fi;
+  # remaining elementary subgroups, first those with fewer classes
+  SortParallel(UT!.mncbigncl, UT!.mncbig);
+  for i in [1..Length(UT!.mncbig)] do
+    a := UT!.mncbig[i];
+    Info(InfoUTable, 1, "Induce from elementary ", a,
+          " |C|=",ords[a[1]]," |P|=",op(a[1], a[2]), 
+          " (", UT!.mncbigncl[i], " classes)");
+    l := InducedFromElementary(UT, a[1], a[2]);
+    ImportToUTable(UT, l);
+    AddSet(UT!.mncdone, a);
+    ExtendLLLUTable(UT);
+    ReduceUTable(UT);
+    if Length(UT!.ichars) = ncl then
+      Sort(UT!.ichars);
+      return UT!.ichars;
     fi;
   od;
+
   # we should be done by now, but maybe we need a stronger LLL
-  ExtendGramUTable(UT);
+  ExtendLLLUTable(UT);
   ReduceUTable(UT, 99999/100000);
   if Length(UT!.ichars) = ncl then
     Sort(UT!.ichars);
     return UT!.ichars;
   fi;
-
-  Error("Irr for UTable: not all irreducibles found.");
+  
+  # we give up, print a warning and return fail
+  Info(InfoWarning, 1, "Irr for UTable: not all irreducibles found.\n",
+       "Maybe try LLL with delta=1, or add some characters...");
+  return fail;
 end);
 
 
