@@ -2,6 +2,7 @@
 ##  
 ##  Read implementation files of the 'UTable' package
 ##  
+ReadPackage( "UTable", "lib/LLL.gi");
 ReadPackage( "UTable", "lib/PositionConjugacyClass.gi");
 ReadPackage( "UTable", "lib/PowerMaps.gi");
 ReadPackage( "UTable", "lib/SomeCharacters.gi");
