@@ -88,7 +88,7 @@ end);
 # calls to AddVectorsLLLRecord and ReduceLLLRecord are equivalent to
 # adding all vectors in the beginning and reducing once
 BindGlobal("ReduceLLLRecord", function(LR, delta...)
-  local y, gram, mue, B, H, r, n, kmax, k, null, ak,
+  local y, gram, mue, B, H, r, n, kmax, k, null, ak, a, b,
         RED, q, mmue, BB, row, i, j, l;
   if Length(delta) > 0 then
     y := delta[1];
@@ -117,7 +117,7 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
 
   # helper that is needed in several places below
   RED := function( gram, mue, H, n, k, l )
-    local q, i;
+    local rat, a, b, q, i;
     if l = 0 then
       return;
     fi;
@@ -126,26 +126,59 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
     if 1 < mue[k][l] * 2 or mue[k][l] * 2 < -1 then
 
       # Let $q = `Round( mue[k][l] )'$ (is never zero), \ldots
-      q:= Int( mue[k][l] );
-      if AbsoluteValue( mue[k][l] - q ) * 2 > 1 then
-        q:= q + SignInt( mue[k][l] );
+      #q:= Int( mue[k][l] );
+      #if AbsoluteValue( mue[k][l] - q ) * 2 > 1 then
+      #  q:= q + SignInt( mue[k][l] );
+      #fi;
+      rat := mue[k][l];
+      a := NumeratorRat(rat);
+      b := DenominatorRat(rat);
+      if a >= 0 then
+        q := QuoInt(2*a+b, 2*b);
+      else
+        q := QuoInt(2*a-b, 2*b);
       fi;
+      # rat = rat-q
+      rat := (a - b*q)/b;
 
       # \ldots adjust the Gram matrix (rows and columns, but only
       # in the lower triangular half), \ldots
-      gram[k][k]:= gram[k][k] - q * gram[k][l];
+      #gram[k][k]:= gram[k][k] - q * gram[k][l];
+      #for i in [ r+1 .. l ] do
+      #  gram[k][i]:= gram[k][i] - q * gram[l][i];
+      #od;
+      #for i in [ l+1 .. k ] do
+      #  gram[k][i]:= gram[k][i] - q * gram[i][l];
+      #od;
+      #for i in [ k+1 .. n ] do
+      #  gram[i][k]:= gram[i][k] - q * gram[i][l];
+      #od;
+      a := gram[k];
+      if a[l] <> 0 then
+        a[k] := a[k] - q*a[l];
+      fi;
+      b := gram[l];
       for i in [ r+1 .. l ] do
-        gram[k][i]:= gram[k][i] - q * gram[l][i];
+        if b[i] <> 0 then
+          a[i] := a[i] - q*b[i];
+        fi;
       od;
       for i in [ l+1 .. k ] do
-        gram[k][i]:= gram[k][i] - q * gram[i][l];
+        b := gram[i][l];
+        if b <> 0 then
+          a[i] := a[i] - q*b;
+        fi;
       od;
       for i in [ k+1 .. n ] do
-        gram[i][k]:= gram[i][k] - q * gram[i][l];
+        a := gram[i];
+        if a[l] <> 0 then
+          a[k] := a[k] - q*a[l];
+        fi;
       od;
 
       # \ldots adjust `mue', \ldots
-      mue[k][l]:= mue[k][l] - q;
+      #mue[k][l]:= mue[k][l] - q;
+      mue[k][l]:= rat;
       for i in [ r+1 .. l-1 ] do
         if mue[l][i] <> 0 then
           mue[k][i]:= mue[k][i] - q * mue[l][i];
@@ -153,8 +186,14 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
       od;
 
       # \ldots and the basechange.
-      H[k]:= H[k] - q * H[l];
-
+      #H[k]:= H[k] - q * H[l];
+      a := H[k];
+      b := H[l];
+      for i in [1..n] do
+        if b[i] <> 0 then
+          a[i] := a[i] - q*b[i];
+        fi;
+      od;
     fi;
   end;
 
@@ -169,8 +208,8 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
     # If $k \leq k_{max}$ go to step 3.
     if k > kmax then
 
-      Info( InfoZLattice, 2,
-            "LLLReducedGramMat: Take ", Ordinal( k ), " vector" );
+      Info( InfoUTable, 5,
+            "ReducedLLLRecord: Take ", Ordinal( k ), " vector" );
 
       # Otherwise \ldots
       kmax:= k;
@@ -190,7 +229,7 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
     # step 3 (Test LLL condition)
     if k > 1 then
       RED( gram, mue, H, n, k, k-1 );
-      while B[k] < ( y - mue[k][k-1] * mue[k][k-1] ) * B[k-1] do
+      while B[k] < ( y - mue[k][k-1]^2 ) * B[k-1] do
 
         # Execute Sub-algorithm SWAPG$( k )$\:
         # Exchange $H_k$ and $H_{k-1}$,
@@ -200,26 +239,45 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
 
         # adjust the Gram matrix (rows and columns,
         # but only in the lower triangular half),
+        a := gram[k];
+        b := gram[k-1];
         for j in [ r+1 .. k-2 ] do
-          q            := gram[k][j];
-          gram[k][j]   := gram[k-1][j];
-          gram[k-1][j] := q;
+          #q            := gram[k][j];
+          #gram[k][j]   := gram[k-1][j];
+          #gram[k-1][j] := q;
+          q    := a[j];
+          a[j] := b[j];
+          b[j] := q;
         od;
         for j in [ k+1 .. n ] do
-          q            := gram[j][k];
-          gram[j][k]   := gram[j][k-1];
-          gram[j][k-1] := q;
+          #q            := gram[j][k];
+          #gram[j][k]   := gram[j][k-1];
+          #gram[j][k-1] := q;
+          a := gram[j];
+          q      := a[k];
+          a[k]   := a[k-1];
+          a[k-1] := q;
         od;
-        q              := gram[k-1][k-1];
-        gram[k-1][k-1] := gram[k][k];
-        gram[k][k]     := q;
+        a := gram[k];
+        b := gram[k-1];
+        #q              := gram[k-1][k-1];
+        #gram[k-1][k-1] := gram[k][k];
+        #gram[k][k]     := q;
+        q      := b[k-1];
+        b[k-1] := a[k];
+        a[k]   := q;
 
         # and if $k > 2$, for all $j$ such that $1 \leq j \leq k-2$
         # exchange $\mue_{k,j}$ with $\mue_{k-1,j}$.
+        a := mue[k];
+        b := mue[k-1];
         for j in [ r+1 .. k-2 ] do
-          q           := mue[k][j];
-          mue[k][j]   := mue[k-1][j];
-          mue[k-1][j] := q;
+          #q           := mue[k][j];
+          #mue[k][j]   := mue[k-1][j];
+          #mue[k-1][j] := q;
+          q    := a[j];
+          a[j] := b[j];
+          b[j] := q;
         od;
 
         # Then set $\mue \leftarrow \mue_{k,k-1}$
@@ -238,9 +296,13 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
           # and for $i = k+1, k+2, \ldots, k_{max}$
           # exchange $\mue_{i,k}$ and $\mue_{i,k-1}$.
           for i in [ k+1 .. kmax ] do
-            q           := mue[i][k];
-            mue[i][k]   := mue[i][k-1];
-            mue[i][k-1] := q;
+            a := mue[i];
+            #q           := mue[i][k];
+            #mue[i][k]   := mue[i][k-1];
+            #mue[i][k-1] := q;
+            q      := a[k];
+            a[k]   := a[k-1];
+            a[k-1] := q;
           od;
 
         # In the case $B_k = 0$ and $\mue \not= 0$,
@@ -250,12 +312,16 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
           B[k-1]:= BB;
 
           # $\mue_{k,k-1} \leftarrow \frac{1}{\mue}
-          mue[k][k-1]:= 1 / mmue;
+          b := 1 / mmue;
+          #mue[k][k-1]:= 1 / mmue;
+          mue[k][k-1] := b;
 
           # and for $i = k+1, k+2, \ldots, k_{max}$
           # set $\mue_{i,k-1} \leftarrow \mue_{i,k-1} / \mue$.
           for i in [ k+1 .. kmax ] do
-            mue[i][k-1]:= mue[i][k-1] / mmue;
+            a := mue[i];
+            #mue[i][k-1]:= mue[i][k-1] / mmue;
+            a[k-1] := a[k-1] * b;
           od;
 
         else
@@ -265,7 +331,9 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
           q:= B[k-1] / BB;
 
           # $\mue_{k,k-1} \leftarrow \mue t$,
-          mue[k][k-1]:= mmue * q;
+          b := mmue * q;
+          #mue[k][k-1]:= mmue * q;
+          mue[k][k-1] := b;
 
           # $B_k \leftarrow B_k t$,
           B[k]:= B[k] * q;
@@ -278,9 +346,13 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
           # $\mue_{i,k} \leftarrow \mue_{i,k-1} - \mue t$,
           # $\mue_{i,k-1} \leftarrow t + \mue_{k,k-1} \mue_{i,k}$.
           for i in [ k+1 .. kmax ] do
-            q:= mue[i][k];
-            mue[i][k]:= mue[i][k-1] - mmue * q;
-            mue[i][k-1]:= q + mue[k][k-1] * mue[i][k];
+            a := mue[i];
+            #q:= mue[i][k];
+            #mue[i][k]:= mue[i][k-1] - mmue * q;
+            #mue[i][k-1]:= q + mue[k][k-1] * mue[i][k];
+            q      := a[k];
+            a[k]   := a[k-1] - mmue * q;
+            a[k-1] := q + b * a[k];
           od;
 
         fi;
