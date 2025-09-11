@@ -22,6 +22,7 @@ DeclareAttribute("NrRationalClasses", IsNearlyCharacterTable);
 DeclareAttribute("RationalClassIndices", IsGroup);
 DeclareAttribute("RationalClassIndices", IsNearlyCharacterTable);
 
+DeclareGlobalName("EncodeForUTable");
 DeclareGlobalName("ImportToUTable");
 DeclareGlobalName("ExpandFromUTable");
 DeclareGlobalName("ExtendLLLUTable");
