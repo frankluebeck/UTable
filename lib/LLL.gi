@@ -178,10 +178,16 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
 
       # \ldots adjust `mue', \ldots
       #mue[k][l]:= mue[k][l] - q;
-      mue[k][l]:= rat;
+      a := mue[k];
+      b := mue[l];
+      #mue[k][l]:= rat;
+      a[l] := rat;
       for i in [ r+1 .. l-1 ] do
-        if mue[l][i] <> 0 then
-          mue[k][i]:= mue[k][i] - q * mue[l][i];
+        #if mue[l][i] <> 0 then
+        #  mue[k][i]:= mue[k][i] - q * mue[l][i];
+        #fi;
+        if b[i] <> 0 then
+          a[i]:= a[i] - q * b[i];
         fi;
       od;
 
