@@ -132,13 +132,33 @@ BindGlobal("EncodeForUTable", function(UT, l)
   return res;
 end);
 
-
+# import generalized characters given by values on classes of G
 BindGlobal("ImportToUTable", function(UT, l)
   local vs, c, v, ic;
   if Length(l) = 0 then
     return;
   fi;
   vs := EncodeForUTable(UT, l);
+  for v in vs do
+    # reduce with known irreducibles
+    for ic in UT!.ichars do
+      c := ScalarProduct(UT, v, ic);
+      if c <> 0 then
+        v := v - c * ic;
+      fi;
+    od;
+
+    if not (IsZero(v) or v in UT!.lll.vectors or v in UT!.nchars) then
+      Add(UT!.nchars, v);
+    fi;
+  od;
+end);
+# import generalized characters already encoded in UT format
+BindGlobal("ImportEncodedToUTable", function(UT, vs)
+  local c, v, ic;
+  if Length(vs) = 0 then
+    return;
+  fi;
   for v in vs do
     # reduce with known irreducibles
     for ic in UT!.ichars do
@@ -200,9 +220,13 @@ end);
 # extend LLL record by new characters in UT!.nchars
 # done in a loop of adding a few new characters, reducing and cleaning 
 # the LLL record (this can avoid the computation of many scalar products)
-BindGlobal("ExtendLLLUTable", function(UT)
-  local k, nc, lll, len, rg;
-  k := 10;
+BindGlobal("ExtendLLLUTable", function(UT, k...)
+  local nc, lll, len, rg;
+  if Length(k) > 0 then
+    k := k[1];
+  else
+    k := 10;
+  fi;
   # we reduce at most k new characters at a time
   nc := UT!.nchars;
   lll := UT!.lll;
@@ -324,7 +348,9 @@ end);
 
 # The main automatic function.
 # Can be called from the start or after adding characters by hand.
-InstallOtherMethod(Irr, ["IsUTable"], 
+# We keep this version which uses 'InducedFromElementary' and first skips
+# elementary subgroups with many conjugacy classes.
+BindGlobal("IrrUTable1", 
 function(UT)
   local G, len, scen, ncl, ords, op, v, l, det, mc, mnc, g, i, a, j;
   G := UnderlyingGroup(UT);
@@ -466,7 +492,155 @@ function(UT)
   return fail;
 end);
 
+# In this version we use 'InductionDataFromElementaryUTable' to avoid huge
+# character tables of elementary subgroups (characters are produced by and
+# by). We start with elementary subgroups close to Sylow subgroups which
+# often yield many useful generalized characters.
+# Optional parameter k (default k=10) says how often the LLL data are
+# cleaned up (seems little overhead and avoids the computation of too many 
+# scalar products).
+BindGlobal("IrrUTable2",  function(UT, k...)
+  local G, len, scen, ncl, ords, op, l, mnc, det, idat, next, vs, a, v;
+  if Length(k) > 0 then
+    k := k[1];
+  else
+    k := 10;
+  fi;
+  G := UnderlyingGroup(UT);
+  len := NrRationalClasses(UT);
+  scen := SizesCentralizers(UT);
+  ncl := NrConjugacyClasses(UT);
+  ords := OrdersClassRepresentatives(UT);
+  op := function(i, p)
+    local sz, res;
+    sz := scen[i]/p;
+    res := 1;
+    while IsInt(sz) do
+      res := res*p;
+      sz := sz/p;
+    od;
+    return res;
+  end;
 
 
+  # induce from all (maximal) cyclic subgroups
+  Info(InfoUTable, 1, "Induce from maximal cyclic subgroups");
+  ImportToUTable(UT, InducedFromAllMaximalCyclicSubgroups(G));
+  
+  # Note that it is not good to add the trivial character as
+  # irreducible first, because reduction with it will make
+  # sparse induced characters non-sparse.
+  Info(InfoUTable, 1, "Trivial and natural characters");
+  ImportToUTable(UT, [0*[1..ncl]+1]);
+  l := NaturalCharacters(G);
+  ImportToUTable(UT, l);
 
+  ExtendLLLUTable(UT, k);
+  ReduceUTable(UT);
+  if Length(UT!.ichars) = ncl then
+    Sort(UT!.ichars);
+    return UT!.ichars;
+  fi;
+
+  # And some cheap characters from power maps
+  Info(InfoUTable, 1, "Cheap characters from power maps");
+  l := SmallPowerMapCharacters(G);
+  ImportToUTable(UT, l);
+
+  # Reduce these
+  ExtendLLLUTable(UT, k);
+  ReduceUTable(UT);
+  if Length(UT!.ichars) = ncl then
+    Sort(UT!.ichars);
+    return UT!.ichars;
+  fi;
+
+  # now induce from (maximal) non-cyclic elementary subgroups
+  mnc := MaximalNonCyclicElementarySubgroups(G);
+  if not IsBound(UT!.mncdone) then
+    UT!.mncdone := [];
+  fi;
+  # first only cases where p is still in determinant of Gram matrix
+  # (this is in the index of the lattice found so far)
+  for a in mnc do
+    if not a in UT!.mncdone then
+      det := DeterminantGramUTable(UT);
+      if det mod a[2] = 0 then
+        Info(InfoUTable, 1, "Induce from elementary ", a,
+                " |C|=",ords[a[1]]," |P|=",op(a[1], a[2]));
+        idat := InductionDataFromElementaryUTable(UT, a[1], a[2]);
+        next := idat.next;
+        vs := Set(next());
+        while vs <> fail do
+          ImportEncodedToUTable(UT, vs);
+          if Length(UT!.nchars) > 500 then
+            ExtendLLLUTable(UT, k);
+            ReduceUTable(UT);
+          fi;
+          if Length(UT!.ichars) = ncl then
+            Sort(UT!.ichars);
+            return UT!.ichars;
+          fi;
+          vs := next();
+        od;
+        if Length(UT!.nchars) > 0 then
+          ExtendLLLUTable(UT, k);
+          ReduceUTable(UT);
+        fi;
+        if Length(UT!.ichars) = ncl then
+          Sort(UT!.ichars);
+          return UT!.ichars;
+        fi;
+        AddSet(UT!.mncdone, a);
+      fi;
+    fi;
+  od;
+  # if not done we also need the remaining elementary subgroups
+  for a in mnc do
+    if not a in UT!.mncdone then
+      Info(InfoUTable, 1, "Induce from elementary ", a,
+              " |C|=",ords[a[1]]," |P|=",op(a[1], a[2]));
+      idat := InductionDataFromElementaryUTable(UT, a[1], a[2]);
+      next := idat.next;
+      vs := Set(next());
+      while vs <> fail do
+        ImportEncodedToUTable(UT, vs);
+        if Length(UT!.nchars) > 500 then
+          ExtendLLLUTable(UT, k);
+          ReduceUTable(UT);
+        fi;
+        if Length(UT!.ichars) = ncl then
+          Sort(UT!.ichars);
+          return UT!.ichars;
+        fi;
+        vs := next();
+      od;
+      if Length(UT!.nchars) > 0 then
+        ExtendLLLUTable(UT, k);
+        ReduceUTable(UT);
+      fi;
+      if Length(UT!.ichars) = ncl then
+        Sort(UT!.ichars);
+        return UT!.ichars;
+      fi;
+      AddSet(UT!.mncdone, a);
+    fi;
+  od;
+
+  # we should be done by now, but maybe we need a stronger LLL
+  ExtendLLLUTable(UT, k);
+  ReduceUTable(UT, 9999999/10000000);
+  if Length(UT!.ichars) = ncl then
+    Sort(UT!.ichars);
+    return UT!.ichars;
+  fi;
+  
+  # we give up, print a warning and return fail
+  Info(InfoWarning, 1, "Irr for UTable: not all irreducibles found.\n",
+       "Maybe try LLL with delta=1, or add some characters...");
+  return fail;
+end);
+
+# we use second as default method
+InstallOtherMethod(Irr, ["IsUTable"], UT-> IrrUTable2(UT, 10));
 
