@@ -413,6 +413,8 @@ BindGlobal("CleanLLLRecord", function(LR)
   tr := LR.H{[r+1..n]};
   if LR.vectors = false then
     nvec := false;
+  elif Length(LR.vectors) = 0 then
+    return;
   else
     nvec := tr * LR.vectors;
   fi;
