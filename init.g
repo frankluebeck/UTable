@@ -9,6 +9,7 @@ ReadPackage( "UTable", "lib/SomeCharacters.gd");
 ReadPackage( "UTable", "lib/Elementary.gd");
 ReadPackage( "UTable", "lib/ScalarProducts.gd");
 ReadPackage( "UTable", "lib/LLL.gd");
+ReadPackage( "UTable", "lib/SplitByCentre.gd");
 
 if (not IsBound(UTScalarProductInternal)) and
         IsKernelExtensionAvailable("UTable","scalar") then
