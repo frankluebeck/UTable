@@ -86,6 +86,7 @@ function(UT, zind)
   for i in reps do
     zchmults[i] := 1 + Number(Set(zgalois), a-> a[1]=i);
   od;
+  UT!.zchmults := zchmults;
 
   SetSplittingCentre(UT, zind);
 
