@@ -104,6 +104,9 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
   kmax := LR.kmax;
   # we start here since first kmax vectors are already reduced
   k := kmax+1; 
+  if k > n then
+    return;
+  fi;
   # extend the H matrix
   null := 0*[k..n];
   for row in H do
@@ -116,7 +119,7 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
   od;
 
   # helper that is needed in several places below
-  RED := function( gram, mue, H, n, k, l )
+  RED := function( gram, mue, H, n, k, l, r )
     local rat, a, b, q, i;
     if l = 0 then
       return;
@@ -234,7 +237,7 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
 
     # step 3 (Test LLL condition)
     if k > 1 then
-      RED( gram, mue, H, n, k, k-1 );
+      RED( gram, mue, H, n, k, k-1, r );
       while B[k] < ( y - mue[k][k-1]^2 ) * B[k-1] do
 
         # Execute Sub-algorithm SWAPG$( k )$\:
@@ -376,7 +379,7 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
         # does not matter because this would mean just to subtract
         # a multiple of a zero vector.
 
-        RED(  gram, mue, H, n, k, k-1 );
+        RED(  gram, mue, H, n, k, k-1, r );
 
       od;
     fi;
@@ -386,7 +389,7 @@ BindGlobal("ReduceLLLRecord", function(LR, delta...)
     fi;
 
     for l in [ k-2, k-3 .. r+1 ] do
-      RED(  gram, mue, H, n, k, l );
+      RED(  gram, mue, H, n, k, l, r );
     od;
     k:= k+1;
 
