@@ -16,3 +16,9 @@ if (not IsBound(UTScalarProductInternal)) and
   LoadKernelExtension("UTable", "scalar");
 fi;
 
+if (not IsBound(ReduceLLLRecordInternal)) and
+        IsKernelExtensionAvailable("UTable","lll") then
+  LoadKernelExtension("UTable", "lll");
+elif not IsBound(ReduceLLLRecordInternal) then
+  ReduceLLLRecordInternal := fail;
+fi;

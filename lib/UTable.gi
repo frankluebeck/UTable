@@ -287,14 +287,20 @@ BindGlobal("ExtendLLLUTable", function(UT, k...)
   od;
 end);
 
+
 # reduce characters in UT!.lll and
 # move found irreducibles to UT!.ichars, and remove those from the remaining
 # characters
 # (in case of splitting by centre we can handle the part for each character
 # of the centre separately)
 BindGlobal("ReduceUTable", function(UT, delta...)
-  local ncl, ll, lic, lmul, lll, nirr, irr, g, len, m, oc, noc, ch, 
+  local RL, ncl, ll, lic, lmul, lll, nirr, irr, g, len, m, oc, noc, ch, 
         ng, gg, v, ni, ic, sfi, sfo, sdet, i, j, k;
+  if ReduceLLLRecordInternal <> fail then
+    RL := ReduceLLLRecordInternal;
+  else
+    RL := ReduceLLLRecord;
+  fi;
   if Length(delta) > 0 then
     delta := delta[1];
   else
@@ -324,7 +330,7 @@ BindGlobal("ReduceUTable", function(UT, delta...)
   for k in [1..Length(ll)] do
     # reduce and clean
     lll := ll[k];
-    ReduceLLLRecord(lll, delta);
+    RL(lll, delta);
     CleanLLLRecord(lll);
     
     # now check for irreducibles and adjust
@@ -403,7 +409,7 @@ BindGlobal("ReduceUTable", function(UT, delta...)
       lll.mue := [];
       lll.B := [];
       lll.H := [];
-      ReduceLLLRecord(lll, delta);
+      RL(lll, delta);
     fi;
   od;
   sfi := function()
