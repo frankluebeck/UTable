@@ -466,3 +466,41 @@ BindGlobal("SmallPowerMapCharacters", function(G)
   return res;
 end);
 
+BindGlobal("ActionAutomorphismsOnConjugacyClasses", function(G, A)
+  local gens, agens, reps, excl, l, pos, a, x;
+  gens := [];
+  agens := GeneratorsOfGroup(A);
+  reps := List(ConjugacyClasses(G), Representative);
+  for a in agens do
+    excl := [];
+    l := [];
+    for x in reps do
+      pos := PositionConjugacyClass(G, x^a, excl);
+      Add(l, pos);
+      AddSet(excl, pos);
+    od;
+    Add(gens, PermList(l));
+  od;
+  return Group(gens);
+end);
+BindGlobal("ActionAutomorphismsOnRationalClasses", function(G, A)
+  local gens, agens, rci, rinds, cls, reps, excl, l, pos, ll, a, x;
+  gens := [];
+  agens := GeneratorsOfGroup(A);
+  rci := RationalClassesInfo(G);
+  rinds := List(rci, r-> r.classes);
+  cls := ConjugacyClasses(G);
+  reps := List(rinds, r-> Representative(cls[r[1]]));
+  for a in agens do
+    excl := [];
+    l := [];
+    for x in reps do
+      pos := PositionConjugacyClass(G, x^a, excl);
+      Add(l, pos);
+      AddSet(excl, pos);
+    od;
+    ll := List(l, i-> First([1..Length(rinds)], j-> i in rinds[j]));
+    Add(gens, PermList(ll));
+  od;
+  return Group(gens);
+end);

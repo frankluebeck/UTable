@@ -18,3 +18,6 @@ DeclareGlobalName("InducedFromAllMaximalCyclicSubgroups");
 
 DeclareGlobalName("PowerMapCharacters");
 DeclareGlobalName("SmallPowerMapCharacters");
+
+DeclareGlobalName("ActionAutomorphismsOnConjugacyClasses");
+DeclareGlobalName("ActionAutomorphismsOnRationalClasses");
