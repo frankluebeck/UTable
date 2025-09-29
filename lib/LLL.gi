@@ -87,9 +87,48 @@ end);
 # in this function we do not change input vectors, such that repeated
 # calls to AddVectorsLLLRecord and ReduceLLLRecord are equivalent to
 # adding all vectors in the beginning and reducing once
+if IsBound(GAP_jl) then
+# does nothing if kmax > 0 during a stepwise computation
+UseJuliaForLLLReduce := function(lll)
+  local gr, jgr, lt, tr, i, j;
+  if lll.gram = [] or lll.kmax > 0  then
+    return;
+  fi;
+  gr := List(lll.gram, ShallowCopy);
+  for i in [1..Length(gr)] do
+    for j in [i+1..Length(gr)] do
+      gr[i][j] := gr[j][i];
+    od;
+  od;
+  jgr := GAPToJulia(Julia.ZZMatrix, gr);
+  lt := Julia.lll_gram_with_transform(jgr);
+  gr := GAP_jl.Obj(lt[1]);
+  for i in [1..Length(gr)] do
+    gr[i] := gr[i]{[1..i]};
+  od;
+  lll.gram := gr;
+  tr := GAP_jl.Obj(lt[2]);
+  if lll.H = [] then
+    lll.H := tr;
+  else
+    lll.H := tr * lll.H;
+  fi;
+end;
+else
+# do nothing
+UseJuliaForLLLReduce := function(arg...)
+end;
+fi;
+
 BindGlobal("ReduceLLLRecord", function(LR, delta...)
   local y, gram, mue, B, H, r, n, kmax, k, null, ak, a, b,
         RED, q, mmue, BB, row, i, j, l;
+
+  # in case Julia is available and kmax = 0 we let
+  # Julia/Nemo do most of the work
+##  sometimes very slow, so disable ...  
+  #UseJuliaForLLLReduce(LR);
+
   if Length(delta) > 0 then
     y := delta[1];
   else
@@ -441,5 +480,3 @@ BindGlobal("CleanLLLRecord", function(LR)
   LR.kmax := n-r;
 end);
 
-
-   
