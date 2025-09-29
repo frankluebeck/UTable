@@ -182,17 +182,17 @@ end);
 # And the second entry 'needed' contains the numbers of classes of S
 # occuring in fus.
 BindGlobal("FusionElementaryUTable", function(UT, i, p)
-  local G, cls, ncl, reps, ords, cens, s, ssz, x, o, pms, rci, todo, 
-        scl, scll, oscl, e, k, excl, ko, kk, fus1, z, fus, m, efus, img, 
-        poss, needed, pp, a, b, j;
+  local G, cls, ncl, ords, cen, s, ssz, x, o, pms, rci, todo, scl, sclr, scll, 
+        oscl, e, k, excl, ko, kk, max, n, ncls, els, ngen, gens, perm, orbs, 
+        orb, same, fus1, z, fus, m, efus, img, poss, needed, pp, 
+        a, b, y, g, r, j;
   G := UnderlyingGroup(UT);
   cls := ConjugacyClasses(UT);
   ncl := NrConjugacyClasses(UT);
-  reps := List(cls, Representative);
   ords := OrdersClassRepresentatives(UT);
-  cens := List(cls, StabilizerOfExternalSet);
   # p-group (it is not needed later, we remove the stored attribute)
-  s := SylowSubgroup(cens[i], p);
+  cen := StabilizerOfExternalSet(cls[i]);
+  s := SylowSubgroup(cen, p);
   ssz := Size(s);
   # generator of cyclic group
   x := Representative(cls[i]);
@@ -204,6 +204,7 @@ BindGlobal("FusionElementaryUTable", function(UT, i, p)
   # classes of s
   IsSupersolvableGroup(s);
   scl := ConjugacyClasses(s);
+  sclr := List(scl, Representative);
   scll := List(scl, Size);
   oscl := OrdersClassRepresentatives(s);
 
@@ -225,11 +226,58 @@ BindGlobal("FusionElementaryUTable", function(UT, i, p)
     k := k*p;
   od;
   
+  # compute orbit of normalizer in cen on classes of s to reduce
+  # conjugacy tests
+  if IsBound(UT!.maxelmlist) then
+    max := UT!.maxelmlist;
+  else
+    max := 1000000;
+  fi;
+  if ssz <= max then
+    n := Normalizer(cen, s);
+    if Size(n) > ssz then
+      ncls := [];
+      els := [];
+      for i in [1..Length(scl)] do
+        for y in scl[i] do
+          Add(els, y);
+          Add(ncls, i);
+        od;
+      od;
+      SortParallel(els, ncls);
+      ngen := GeneratorsOfGroup(n);
+      gens := [];
+      for g in ngen do
+        perm := [];
+        for r in sclr do
+          Add(perm, ncls[PositionSorted(els, r^g)]);
+        od;
+        Add(gens, PermList(perm));
+      od;
+      els := 0;
+      orbs := List(Orbits(Group(gens), [1..Length(scl)]), Set);
+      same := [];
+      for orb in orbs do
+        for i in [2..Length(orb)] do
+          same[orb[i]] := orb[1];
+        od;
+      od;
+    else
+      same := [];
+    fi;
+  else
+    same := [];
+  fi;
+
   # fusion of classes of x y with y in reps of classes of s
   fus1 := [];
   for j in [1..Length(scl)] do
-    z := x*Representative(scl[j]);
-    Add(fus1, PositionConjugacyClass(G, z, excl[oscl[j]]));
+    if IsBound(same[j]) then
+      Add(fus1, fus1[same[j]]);
+    else
+      z := x*Representative(scl[j]);
+      Add(fus1, PositionConjugacyClass(G, z, excl[oscl[j]]));
+    fi;
   od;
 
   # the rest we get from power maps
