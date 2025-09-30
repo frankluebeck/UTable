@@ -25,7 +25,7 @@
 Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
 {
   long i, j;
-  Obj rat, x, y, xx, xi, a, b, q;
+  Obj rat, x, y, xx, xi, a, b, q, t1, t2;
 
   Obj null=INTOBJ_INT(0), one=INTOBJ_INT(1), two=INTOBJ_INT(2);
 
@@ -45,10 +45,15 @@ Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
     xi = AInvInt(xx);
     if (!LtInt(y, xx) && !LtInt(y, xi))
       return NULL;
-    if (!IS_NEG_INT(x))
-      q = QuoInt(SumInt(xx,y),ProdInt(two,y));
-    else
-      q = QuoInt(DiffInt(xx,y),ProdInt(two,y));
+    if (!IS_NEG_INT(x)) {
+      t1 = SumInt(xx,y);
+      t2 = ProdInt(two,y);
+      q = QuoInt(t1, t2);
+    } else {
+      t1 = DiffInt(xx,y);
+      t2 = ProdInt(two,y);
+      q = QuoInt(t1, t2);
+    }
     rat = DIFF(rat, q);
   }
 
@@ -56,7 +61,8 @@ Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
   x = ELM_PLIST(a, l);
   if (x != null) {
     y = ELM_PLIST(a, k);
-    y = DiffInt(y, ProdInt(q, x));
+    t2 = ProdInt(q, x);
+    y = DiffInt(y, t2);
     SET_ELM_PLIST(a, k, y);
     CHANGED_BAG(a);
   } 
@@ -64,7 +70,9 @@ Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
   for (i=r+1; i<=l; i++) {
     x = ELM_PLIST(b, i);
     if (x != null) {
-      y = DiffInt(ELM_PLIST(a, i), ProdInt(q, x));
+      t1 = ELM_PLIST(a, i);
+      t2 = ProdInt(q, x);
+      y = DiffInt(t1, t2);
       SET_ELM_PLIST(a, i, y);
       CHANGED_BAG(a);
     }
@@ -73,7 +81,9 @@ Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
     b = ELM_PLIST(gram, i);
     b = ELM_PLIST(b, l);
     if (b != null) {
-      y = DiffInt(ELM_PLIST(a, i), ProdInt(q, b));
+      t1 = ELM_PLIST(a, i);
+      t2 = ProdInt(q, b);
+      y = DiffInt(t1, t2);
       SET_ELM_PLIST(a, i, y);
       CHANGED_BAG(a);
     }
@@ -82,7 +92,9 @@ Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
     a = ELM_PLIST(gram, i);
     b = ELM_PLIST(a, l);
     if (b != null) {
-      y = DiffInt(ELM_PLIST(a, k), ProdInt(q, b));
+      t1 = ELM_PLIST(a, k);
+      t2 = ProdInt(q, b);
+      y = DiffInt(t1, t2);
       SET_ELM_PLIST(a, k, y);
       CHANGED_BAG(a);
     }
@@ -95,7 +107,9 @@ Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
   for (i=r+1; i<=l-1; i++) {
     x = ELM_PLIST(b, i);
     if (x != null) {
-      y = DIFF(ELM_PLIST(a, i), PROD(q, x));
+      t1 = ELM_PLIST(a, i);
+      t2 = PROD(q, x);
+      y = DIFF(t1, t2);
       SET_ELM_PLIST(a, i, y);
       CHANGED_BAG(a);
     }
@@ -106,7 +120,9 @@ Obj RED(Obj gram, Obj mue, Obj H, long n, long k, long l, long r)
   for (i=1; i<=n; i++) {
     x = ELM_PLIST(b, i);
     if (x != null) {
-      y = DiffInt(ELM_PLIST(a, i), ProdInt(q, x));
+      t1 = ELM_PLIST(a, i);
+      t2 = ProdInt(q, x);
+      y = DiffInt(t1, t2);
       SET_ELM_PLIST(a, i, y);
       CHANGED_BAG(a);
     }
@@ -128,6 +144,7 @@ Obj FuncReduceLLLRecordInternal(Obj self, Obj LR, Obj y)
   Obj gram, mue, B, H, ak, a, b, z, q, bk, muek, akj, mmue, BB, row;
   long r, n, k, kmax, i, j, l;
   Obj *ptr, *pa, *pb;
+  Obj t1, t2;
   Obj null=INTOBJ_INT(0), one=INTOBJ_INT(1);
 
   gram = ELM_REC(LR, RNamName("gram"));
@@ -184,12 +201,16 @@ Obj FuncReduceLLLRecordInternal(Obj self, Obj LR, Obj y)
         b = ELM_PLIST(mue, j);
         akj = ELM_PLIST(a, j);
         for (i=r+1; i<=j-1; i++) {
-          akj = DIFF(akj, PROD(ELM_PLIST(b, i), ELM_PLIST(ak, i)));
+          t1 = ELM_PLIST(b, i);
+          t2 = ELM_PLIST(ak, i);
+          t2 = PROD(t1, t2);
+          akj = DIFF(akj, t2);
         }
         z = QUO(akj, ELM_PLIST(B, j));
         SET_ELM_PLIST(muek, j, z);
         CHANGED_BAG(muek);
-        bk = DIFF(bk, PROD(z, akj));
+        t2 = PROD(z, akj);
+        bk = DIFF(bk, t2);
         SET_ELM_PLIST(ak, j, akj);
         CHANGED_BAG(ak);
       }
@@ -240,8 +261,10 @@ Obj FuncReduceLLLRecordInternal(Obj self, Obj LR, Obj y)
         
         mmue = ELM_PLIST(ELM_PLIST(mue, k), k-1);
         BB = PROD(mmue, mmue);
-        BB = PROD(BB, ELM_PLIST(B, k-1));
-        BB = SUM(ELM_PLIST(B, k), BB);
+        t2 = ELM_PLIST(B, k-1);
+        BB = PROD(BB, t2);
+        t1 = ELM_PLIST(B, k);
+        BB = SUM(t1, BB);
 
         if (BB == null) {
           SET_ELM_PLIST(B, k, ELM_PLIST(B, k-1));
@@ -263,17 +286,20 @@ Obj FuncReduceLLLRecordInternal(Obj self, Obj LR, Obj y)
 
           for (i=k+1; i<=kmax; i++) {
             a = ELM_PLIST(mue, i);
-            z = PROD(ELM_PLIST(a, k-1), b);
+            t1 = ELM_PLIST(a, k-1);
+            z = PROD(t1, b);
             SET_ELM_PLIST(a, k-1, z);
             CHANGED_BAG(a);
           } 
         } else {
-          q = QUO(ELM_PLIST(B, k-1), BB);
+          t1 = ELM_PLIST(B, k-1);
+          q = QUO(t1, BB);
           b = PROD(mmue, q);
           a = ELM_PLIST(mue, k);
           SET_ELM_PLIST(a, k-1, b);
           CHANGED_BAG(a);
-          z = PROD(ELM_PLIST(B, k), q);
+          t1 = ELM_PLIST(B, k);
+          z = PROD(t1, q);
           SET_ELM_PLIST(B, k, z);
           SET_ELM_PLIST(B, k-1, BB);
           CHANGED_BAG(B);
@@ -281,10 +307,13 @@ Obj FuncReduceLLLRecordInternal(Obj self, Obj LR, Obj y)
           for (i=k+1; i<=kmax; i++) {
             a = ELM_PLIST(mue, i);
             q = ELM_PLIST(a, k);
-            z = DIFF(ELM_PLIST(a, k-1), PROD(mmue, q));
+            t1 = ELM_PLIST(a, k-1);
+            t2 = PROD(mmue, q);
+            z = DIFF(t1, t2);
             SET_ELM_PLIST(a, k, z);
             CHANGED_BAG(a);
-            z = SUM(q, PROD(b, z));
+            t2 = PROD(b, z);
+            z = SUM(q, t2);
             SET_ELM_PLIST(a, k-1, z);
             CHANGED_BAG(a);
           }

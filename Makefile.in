@@ -13,9 +13,10 @@ bin/$(GAParch)/scalar.so: src/scalar.c Makefile
 	@mkdir -p bin/$(GAParch)
 	$(GAC) -d -p "$(CPPFLAGS)" -p "$(CFLAGS)" -P "$(LDFLAGS)" -o bin/$(GAParch)/scalar.so src/scalar.c
 
-bin/$(GAParch)/lll.so: src/lll.c Makefile
-	@mkdir -p bin/$(GAParch)
-	$(GAC) -d -p "$(CPPFLAGS)" -p "$(CFLAGS)" -P "$(LDFLAGS)" -o bin/$(GAParch)/lll.so src/lll.c
+#   disabled (temporarily) since there is some memory error
+#bin/$(GAParch)/lll.so: src/lll.c Makefile
+#	@mkdir -p bin/$(GAParch)
+#	$(GAC) -d -p "$(CPPFLAGS)" -p "$(CFLAGS)" -P "$(LDFLAGS)" -o bin/$(GAParch)/lll.so src/lll.c
 
 doc:
 	$(GAP)  makedocrel.g
