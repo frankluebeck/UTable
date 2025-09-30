@@ -811,3 +811,841 @@ end);
 # we use second as default method
 InstallOtherMethod(Irr, ["IsUTable"], UT-> IrrUTable2(UT, 10));
 
+
+# hnf  integer matrix in Hermite normal form
+# piv  indices of pivot columns of hnf
+# v    integer vector in Q-span of the rows of hnf
+# changes hnf to Hermite normal form of lattice extended by v
+# returns index of lattice of hnf in extended lattice
+AddVectorToHNF := function(hnf, piv, v)
+  local ind, n, npiv, a, j, g, b, jj, ua, aj, c, q, i, k, clean;
+  ind := 1;
+  n := Length(hnf[1]);
+  npiv := Length(piv);
+  # reduce new vector
+  for i in [1..npiv] do
+    j := piv[i];
+    if v[j] <> 0 then
+      q := -QuoInt(v[j], hnf[i][j]);
+      if q <> 0 then
+        AddRowVector(v, hnf[i], q, j, n);
+      fi;
+    fi;
+  od;
+  if IsZero(v) then
+    return 1;
+  fi;
+  # v extends the lattice
+  clean := false;
+  for i in [1..npiv] do
+    a := hnf[i];
+    j := piv[i];
+    if v[j] <> 0 then
+      q := -QuoInt(v[j], a[j]);
+      if q <> 0 then
+        AddRowVector(v, a, q, j, n);
+      fi;
+      if v[j] <> 0 then
+        # we have found a vector that enlarges the lattice
+        if i=npiv then
+          b := MATINTbezout(a[j], 0, v[j], 0);
+        else
+          jj := piv[i+1];
+          b := MATINTbezout(a[j], a[jj], v[j], v[jj]);
+        fi;
+        # index grows
+        ind := ind * (a[j]/b.gcd);
+        ua := b.coeff3 * a;
+        MultVector(a, b.coeff1);
+        AddRowVector(a, v, b.coeff2, j, n);
+        AddRowVector(ua, v, b.coeff4, j, n);
+        v := ua;
+        clean := true;
+      fi;
+    fi;
+    if clean then
+      # clean upwards
+      aj := a[j];
+      for k in [1..i-1] do
+        c := hnf[k][j];
+        if c >= aj or -c >= aj then
+          q := -QuoInt(c, aj);
+          if q <> 0 then
+            AddRowVector(hnf[k], a, q, j, n);
+          fi;
+        fi;
+      od;
+    fi;
+  od;
+  return ind;
+end;
+
+UTableHNFCyclic := function(UT)
+  local G, it, iti, hnf, piv, In;
+  G := UnderlyingGroup(UT);
+  it := InducedFromAllMaximalCyclicSubgroups(G);
+  iti := EncodeForUTable(UT, it);
+  hnf := HermiteNormalFormIntegerMat(iti);
+  hnf := Filtered(hnf, a-> not IsZero(a));
+  piv := List(hnf, a-> First([1..Length(a)], i-> a[i]<>0));
+  return rec(matrix := hnf, pivots := piv, index := 1);
+end;
+
+HNF:=0;
+IrrUTable3 := function(UT)
+  local finalize, G, t, rci, ncl, icyc, mat, hnf, pos, dim, piv, gram, hgram, 
+        index, ind, vs, scen, ords, op, mnc, data, j, ps, p, e, idat, next, 
+        good, bad, oldindex, In, v, i;
+
+  # find irreducibles when whole lattice of generalized characters found
+  finalize := function()
+    local t, lll, norms;
+    Info(InfoUTable, 1, "Lattice complete, using LLL for irreducibles.");
+    t := Runtime();
+    lll := UT!.lll;
+    norms := List(hnf, c-> ScalarProduct(UT,c,c));
+    SortParallel(norms, hnf);
+    AddVectorsLLLRecord(lll, hnf);
+    ReduceUTable(UT);
+    if Length(UT!.ichars) <> ncl then
+      # try harder
+      ReduceUTable(UT, 999999/1000000);
+    fi;
+    Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+    if Length(UT!.ichars) <> ncl then
+      Info(InfoWarning, 1, "LLL does not find all irreducibles!");
+      return fail;
+    fi;
+    return UT!.ichars;
+  end;
+
+  G := UnderlyingGroup(UT);
+  Info(InfoUTable, 1, "Computing info on rational classes.");
+  t := Runtime();
+  rci := RationalClassesInfo(UT);
+  ncl := NrConjugacyClasses(G);
+  Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+
+  # all induced characters from cyclic subgroups
+  Info(InfoUTable, 1, "Inducing characters from all maximal cyclic subgroups.");
+  t := Runtime();
+  icyc := InducedFromAllMaximalCyclicSubgroups(G);
+  mat := EncodeForUTable(UT, icyc);
+  Info(InfoUTable, 1, "      ", Length(mat), " characters   ", StringTime(Runtime()-t));
+
+  # Hermite normal form
+  Info(InfoUTable, 1, "Finding Hermite normal form for character values.");
+  t := Runtime();
+  hnf := HermiteNormalFormIntegerMat(mat);
+  pos := First([1..Length(hnf)], i-> IsZero(hnf[i]));
+  if pos <> fail then
+    hnf := hnf{[1..pos-1]};
+  fi;
+  dim := Length(hnf);
+  piv := List(hnf, a-> First([1..Length(a)], i-> a[i]<>0));
+  Info(InfoUTable, 1, "      dimension ", dim, "   ", StringTime(Runtime()-t));
+
+  # find index
+  Info(InfoUTable, 1, "Computing index of all generalized characters.");
+  t := Runtime();
+  gram := List(hnf, c-> List(hnf, d-> ScalarProduct(UT, c, d)));
+##    hgram := HermiteNormalFormIntegerMat(gram);
+##    gram := 0;
+##    index := RootInt(Product([1..dim], i-> hgram[i][i]));
+##    hgram := 0;
+##  or
+##    index := RootInt(DeterminantIntMat(gram));
+  # to find the determinant we use that its prime divisors
+  # also divide the order |G|
+  #TODO  only p in mnc !!!
+  ps := Set(Factors(Size(G)));
+  index := 1;
+  for p in ps do
+    e := Sum(ElementaryDivisorsPPartRk(gram, p, dim))/2;
+    index := index * p^e;
+  od;
+  Info(InfoUTable, 1, "      index ", index, "   ", StringTime(Runtime()-t));
+
+  # using trivial and natural characters
+  Info(InfoUTable, 1, "Adding trivial and natural characters.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, NaturalCharacters(G)));
+  for v in vs do
+    ind := ind * AddVectorToHNF(hnf, piv, v);
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # And some cheap characters from power maps
+  Info(InfoUTable, 1, "Adding cheap characters from power maps.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, SmallPowerMapCharacters(G)));
+  for v in vs do
+    ind := ind * AddVectorToHNF(hnf, piv, v);
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # Now we need non-cyclic elementary subgroups
+  Info(InfoUTable, 1, "Considering maximal non-cyclic elementary subgroups.");
+  # helper for info
+  scen := SizesCentralizers(UT);
+  ords := OrdersClassRepresentatives(UT);
+  op := function(i, p)
+    local sz, res;
+    sz := scen[i]/p;
+    res := 1;
+    while IsInt(sz) do
+      res := res*p;
+      sz := sz/p;
+    od;
+    return res;
+  end;
+
+  mnc := Reversed(MaximalNonCyclicElementarySubgroups(G));
+  data := [];
+  # in a first round we only induce a few characters from each elementary
+  # subgroup
+  for i in [1..Length(mnc)] do
+    j := mnc[i][1];
+    p := mnc[i][2];
+    # not needed if p does not divide index
+    if index mod p = 0 then
+      Info(InfoUTable, 1, "Inducing some characters from elementary ", [j,p],
+                " |C|=",ords[j]," |P|=",op(j, p));
+      t := Runtime();
+      idat := InductionDataFromElementaryUTable(UT, j, p);
+      Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+      t := Runtime();
+      #data[i] := idat;
+      next := idat.next;
+      # we make some statistics and only add a few induced characters in
+      # this round
+      good := 0;
+      bad := 0;
+      oldindex := index;
+      vs := Set(next());
+      #while vs <> fail and 3*good > bad  and index mod p = 0 do
+      while vs <> fail and index mod p = 0 do
+        ind := 1;
+        for v in vs do
+          ind := ind * AddVectorToHNF(hnf, piv, v);
+        od;
+        if ind > 1 then
+          good := good+1;
+        else
+          bad := bad+1;
+        fi;
+        index := index/ind;
+        vs := next();
+      od;
+      Info(InfoUTable, 1, "      found index ", oldindex/index, " of ", 
+                          oldindex, "   ", StringTime(Runtime()-t));
+      if index = 1 then
+        return finalize();
+      fi;
+    fi;
+  od;
+##    # if not yet ready we use the induced characters not yet considered
+##    for i in [1..Length(mnc)] do
+##      j := mnc[i][1];
+##      p := mnc[i][2];
+##      # not needed if p does not divide index
+##      if index mod p = 0 then
+##        Info(InfoUTable, 1, "Inducing remaining characters from elementary ", [j,p],
+##                  " |C|=",ords[i]," |P|=",op(j, p));
+##        t := Runtime();
+##        idat := data[i];
+##        next := idat.next;
+##        oldindex := index;
+##        vs := Set(next());
+##        while vs <> fail and index mod p = 0 do
+##          ind := 1;
+##          for v in vs do
+##            ind := ind * AddVectorToHNF(hnf, piv, v);
+##          od;
+##          index := index/ind;
+##          vs := next();
+##        od;
+##        Info(InfoUTable, 1, "      found index ", oldindex/index, 
+##                            "   ", StringTime(Runtime()-t));
+##        if index = 1 then
+##          return finalize();
+##        fi;
+##      fi;
+##    od;
+end;
+
+IrrUTable4 := function(UT)
+  local finalize, G, t, rci, ncl, icyc, mat, hnf, pos, dim, piv, rhnf, gram, 
+        c, mnc, ps, index, e, ind, vs, scen, ords, op, j, p, idat, next, 
+        oldindex, In, i, v;
+
+  # find irreducibles when whole lattice of generalized characters found
+  finalize := function()
+    local t, lll, norms;
+    hnf := List(hnf, Reversed);
+    Info(InfoUTable, 1, "Lattice complete, using LLL for irreducibles.");
+    t := Runtime();
+    lll := UT!.lll;
+    norms := List(hnf, c-> ScalarProduct(UT,c,c));
+    SortParallel(norms, hnf);
+    AddVectorsLLLRecord(lll, hnf);
+    ReduceUTable(UT);
+    if Length(UT!.ichars) <> ncl then
+      # try harder
+      ReduceUTable(UT, 999999/1000000);
+    fi;
+    Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+    if Length(UT!.ichars) <> ncl then
+      Info(InfoWarning, 1, "LLL does not find all irreducibles!");
+      return fail;
+    fi;
+    return UT!.ichars;
+  end;
+
+  G := UnderlyingGroup(UT);
+  Info(InfoUTable, 1, "Computing info on rational classes.");
+  t := Runtime();
+  rci := RationalClassesInfo(UT);
+  ncl := NrConjugacyClasses(G);
+  Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+
+  # all induced characters from cyclic subgroups
+  Info(InfoUTable, 1, "Inducing characters from all maximal cyclic subgroups.");
+  t := Runtime();
+  icyc := InducedFromAllMaximalCyclicSubgroups(G);
+  mat := EncodeForUTable(UT, icyc);
+  Info(InfoUTable, 1, "      ", Length(mat), " characters   ", StringTime(Runtime()-t));
+
+  # Hermite normal form
+  Info(InfoUTable, 1, "Finding Hermite normal form for character values.");
+  t := Runtime();
+  # From now we work with Hermite normal form of the matrix of values.
+  # Since many induced characters have values on smaller oder elements we
+  # reverse the order of columns for the HNF computations.
+  hnf := HermiteNormalFormIntegerMat(List(mat, Reversed));
+  pos := First([1..Length(hnf)], i-> IsZero(hnf[i]));
+  if pos <> fail then
+    hnf := hnf{[1..pos-1]};
+  fi;
+  dim := Length(hnf);
+  piv := List(hnf, a-> First([1..Length(a)], i-> a[i]<>0));
+  Info(InfoUTable, 1, "      dimension ", dim, "   ", StringTime(Runtime()-t));
+
+  # find index
+  Info(InfoUTable, 1, "Computing index of all generalized characters.");
+  t := Runtime();
+  rhnf := List(hnf, Reversed);
+  gram := List(rhnf, a-> []);
+  for i in [1..dim] do
+    for j in [1..i] do
+      c := ScalarProduct(UT, rhnf[i], rhnf[j]);
+      gram[i][j] := c;
+      gram[j][i] := c;
+    od;
+  od;
+  rhnf := 0;
+  # to find the determinant we use that its prime divisors
+  # also divide the order |G|, in this particular case only primes p
+  # with non-cyclic p-elementary subgroups are left 
+  mnc := Reversed(MaximalNonCyclicElementarySubgroups(G));
+  ps := Set(List(mnc, a-> a[2]));
+  index := 1;
+  for p in ps do
+    e := Sum(ElementaryDivisorsPPartRk(gram, p, dim))/2;
+    index := index * p^e;
+  od;
+  Info(InfoUTable, 1, "      index ", index, "   ", StringTime(Runtime()-t));
+
+  # using trivial and natural characters
+  Info(InfoUTable, 1, "Adding trivial and natural characters.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, NaturalCharacters(G)));
+  for v in vs do
+    ind := ind * AddVectorToHNF(hnf, piv, Reversed(v));
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # And some cheap characters from power maps
+  Info(InfoUTable, 1, "Adding cheap characters from power maps.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, SmallPowerMapCharacters(G)));
+  for v in vs do
+    ind := ind * AddVectorToHNF(hnf, piv, Reversed(v));
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # Now we need non-cyclic elementary subgroups
+  Info(InfoUTable, 1, "Considering maximal non-cyclic elementary subgroups.");
+  # helper for info
+  scen := SizesCentralizers(UT);
+  ords := OrdersClassRepresentatives(UT);
+  op := function(i, p)
+    local sz, res;
+    sz := scen[i]/p;
+    res := 1;
+    while IsInt(sz) do
+      res := res*p;
+      sz := sz/p;
+    od;
+    return res;
+  end;
+
+  # in a first round we only induce a few characters from each elementary
+  # subgroup
+  for i in [1..Length(mnc)] do
+    j := mnc[i][1];
+    p := mnc[i][2];
+    # not needed if p does not divide index
+    if index mod p = 0 then
+      Info(InfoUTable, 1, "Inducing characters from elementary ", [j,p],
+                " |C|=",ords[j]," |P|=",op(j, p));
+      t := Runtime();
+      idat := InductionDataFromElementaryUTable(UT, j, p);
+      Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+      t := Runtime();
+      next := idat.next;
+      oldindex := index;
+      vs := Set(next());
+      while vs <> fail and index mod p = 0 do
+        ind := 1;
+        for v in vs do
+          ind := ind * AddVectorToHNF(hnf, piv, Reversed(v));
+        od;
+        index := index/ind;
+        vs := next();
+      od;
+      Info(InfoUTable, 1, "      found index ", oldindex/index, " of ", 
+                          oldindex, "   ", StringTime(Runtime()-t));
+      if index = 1 then
+        return finalize();
+      fi;
+    fi;
+  od;
+end;
+
+# In IrrUTable4 we quickly find examples where the final LLL computation
+# with the HNF basis (or a HNF basis with respect to some ordering of
+# classes) is a severe bottleneck.
+# 
+# In IrrUTable5 we just find generators of the lattice of virtual characters
+# consisting of the induced characters from maximal cyclic subgroups,
+# followed only by virtual characters which successively enlarge the lattice
+# (which we find during the HNF extensions).
+IrrUTable5 := function(UT)
+  local finalize, G, t, rci, ncl, icyc, mat, useful, hnf, pos, dim, piv, 
+        rhnf, new, gram, c, mnc, ps, index, e, ind, vs, scen, ords, op, j, p, 
+        norms, idat, next, oldindex, In, i, v;
+
+  # find irreducibles when whole lattice of generalized characters found
+  finalize := function()
+    local t, lll, norms, len, rg;
+    Info(InfoUTable, 1, "Lattice complete, using LLL for irreducibles.");
+    # free the memory
+    hnf := 0;
+    t := Runtime();
+    lll := UT!.lll;
+    norms := List(useful, c-> ScalarProduct(UT,c,c));
+    SortParallel(norms, useful);
+    # characters from cyclic subgroups first, then the other 'useful' ones
+    AddVectorsLLLRecord(lll, mat);
+    CleanLLLRecord(lll);
+    len := Length(useful);
+    rg := [1..10];
+    while rg[1] <= len do
+      if rg[10] > len then
+        rg := [rg[1]..len];
+      fi;
+      AddVectorsLLLRecord(lll, useful{rg});
+      CleanLLLRecord(lll);
+      rg := [rg[1]+10..rg[1]+19];
+    od;
+
+    ReduceUTable(UT);
+    if Length(UT!.ichars) <> ncl then
+      # try harder
+      ReduceUTable(UT, 999999/1000000);
+    fi;
+    Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+    if Length(UT!.ichars) <> ncl then
+      Info(InfoWarning, 1, "LLL does not find all irreducibles!");
+      return fail;
+    fi;
+    return UT!.ichars;
+  end;
+
+  G := UnderlyingGroup(UT);
+  Info(InfoUTable, 1, "Computing info on rational classes.");
+  t := Runtime();
+  rci := RationalClassesInfo(UT);
+  ncl := NrConjugacyClasses(G);
+  Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+
+  # all induced characters from cyclic subgroups (we sort them by norm)
+  Info(InfoUTable, 1, "Inducing characters from all maximal cyclic subgroups.");
+  t := Runtime();
+  icyc := InducedFromAllMaximalCyclicSubgroups(G);
+  mat := EncodeForUTable(UT, icyc);
+  norms := List(mat, c-> ScalarProduct(UT, c, c));
+  SortParallel(norms, mat);
+  Info(InfoUTable, 1, "      ", Length(mat), " characters   ", StringTime(Runtime()-t));
+
+  # Hermite normal form
+  Info(InfoUTable, 1, "Finding Hermite normal form for character values.");
+  t := Runtime();
+  # From now we work with Hermite normal form of the matrix of values.
+  # Since many induced characters have values on smaller oder elements we
+  # reverse the order of columns for the HNF computations.
+  hnf := HermiteNormalFormIntegerMat(List(mat, Reversed));
+  pos := First([1..Length(hnf)], i-> IsZero(hnf[i]));
+  if pos <> fail then
+    hnf := hnf{[1..pos-1]};
+  fi;
+  dim := Length(hnf);
+  piv := List(hnf, a-> First([1..Length(a)], i-> a[i]<>0));
+  Info(InfoUTable, 1, "      dimension ", dim, "   ", StringTime(Runtime()-t));
+
+  # find index
+  Info(InfoUTable, 1, "Computing index of all generalized characters.");
+  t := Runtime();
+  rhnf := List(hnf, Reversed);
+  gram := List(rhnf, a-> []);
+  for i in [1..dim] do
+    for j in [1..i] do
+      c := ScalarProduct(UT, rhnf[i], rhnf[j]);
+      gram[i][j] := c;
+      gram[j][i] := c;
+    od;
+  od;
+  rhnf := 0;
+  # to find the determinant we use that its prime divisors
+  # also divide the order |G|, in this particular case only primes p
+  # with non-cyclic p-elementary subgroups are left 
+  mnc := Reversed(MaximalNonCyclicElementarySubgroups(G));
+  ps := Set(List(mnc, a-> a[2]));
+  index := 1;
+  for p in ps do
+    e := Sum(ElementaryDivisorsPPartRk(gram, p, dim))/2;
+    index := index * p^e;
+  od;
+  Info(InfoUTable, 1, "      index ", index, "   ", StringTime(Runtime()-t));
+
+  # we collect useful vectors here
+  useful := [];
+  # using trivial and natural characters
+  Info(InfoUTable, 1, "Adding trivial and natural characters.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, NaturalCharacters(G)));
+  for v in vs do
+    new := AddVectorToHNF(hnf, piv, Reversed(v));
+    if new > 1 then
+      ind := ind * new;
+      Add(useful, v);
+    fi;
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # And some cheap characters from power maps
+  Info(InfoUTable, 1, "Adding cheap characters from power maps.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, SmallPowerMapCharacters(G)));
+  for v in vs do
+    new := AddVectorToHNF(hnf, piv, Reversed(v));
+    if new > 1 then
+      ind := ind * new;
+      Add(useful, v);
+    fi;
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # Now we need non-cyclic elementary subgroups
+  Info(InfoUTable, 1, "Considering maximal non-cyclic elementary subgroups.");
+  # helper for info
+  scen := SizesCentralizers(UT);
+  ords := OrdersClassRepresentatives(UT);
+  op := function(i, p)
+    local sz, res;
+    sz := scen[i]/p;
+    res := 1;
+    while IsInt(sz) do
+      res := res*p;
+      sz := sz/p;
+    od;
+    return res;
+  end;
+
+  # We know that we only need to look at p-elementary subgroups when
+  # p is still dividing the current index.
+  # Also, we stop checking new virtual characters from a p-elementary
+  # subgroup when p is no longer dividing the index (can be very useful
+  # when something close to the Sylow-p-subgroups with maybe many characters
+  # are considered towards the end).
+  for i in [1..Length(mnc)] do
+    j := mnc[i][1];
+    p := mnc[i][2];
+    # not needed if p does not divide index
+    if index mod p = 0 then
+      Info(InfoUTable, 1, "Inducing characters from elementary ", [j,p],
+                " |C|=",ords[j]," |P|=",op(j, p));
+      t := Runtime();
+      idat := InductionDataFromElementaryUTable(UT, j, p);
+      Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+      t := Runtime();
+      next := idat.next;
+      oldindex := index;
+      vs := Set(next());
+      while vs <> fail and index mod p = 0 do
+        ind := 1;
+        for v in vs do
+          new := AddVectorToHNF(hnf, piv, Reversed(v));
+          if new > 1 then
+            ind := ind * new;
+            Add(useful, v);
+          fi;
+        od;
+        index := index/ind;
+        vs := next();
+      od;
+      Info(InfoUTable, 1, "      found index ", oldindex/index, " of ", 
+                          oldindex, "   ", StringTime(Runtime()-t));
+      if index = 1 then
+        return finalize();
+      fi;
+    fi;
+  od;
+end;
+
+
+# since HNF is only for bookkeeping we ignore non-pivot columns
+IrrUTable6 := function(UT)
+  local finalize, G, t, rci, ncl, icyc, mat, useful, hnf, pos, dim, piv, 
+        rhnf, new, gram, c, mnc, ps, index, e, ind, vs, scen, ords, op, j, p, 
+        norms, idat, next, oldindex, In, i, v;
+
+  # find irreducibles when whole lattice of generalized characters found
+  finalize := function()
+    local t, lll, norms, len, rg;
+    Info(InfoUTable, 1, "Lattice complete, using LLL for irreducibles.");
+    # free the memory
+    hnf := 0;
+    t := Runtime();
+    lll := UT!.lll;
+    norms := List(useful, c-> ScalarProduct(UT,c,c));
+    SortParallel(norms, useful);
+    # characters from cyclic subgroups first, then the other 'useful' ones
+    AddVectorsLLLRecord(lll, mat);
+    CleanLLLRecord(lll);
+    len := Length(useful);
+    rg := [1..10];
+    while rg[1] <= len do
+      if rg[10] > len then
+        rg := [rg[1]..len];
+      fi;
+      AddVectorsLLLRecord(lll, useful{rg});
+      CleanLLLRecord(lll);
+      rg := [rg[1]+10..rg[1]+19];
+    od;
+
+    ReduceUTable(UT);
+    if Length(UT!.ichars) <> ncl then
+      # try harder
+      ReduceUTable(UT, 999999/1000000);
+    fi;
+    Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+    if Length(UT!.ichars) <> ncl then
+      Info(InfoWarning, 1, "LLL does not find all irreducibles!");
+      return fail;
+    fi;
+    return UT!.ichars;
+  end;
+
+  G := UnderlyingGroup(UT);
+  Info(InfoUTable, 1, "Computing info on rational classes.");
+  t := Runtime();
+  rci := RationalClassesInfo(UT);
+  ncl := NrConjugacyClasses(G);
+  Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+
+  # all induced characters from cyclic subgroups (we sort them by norm)
+  Info(InfoUTable, 1, "Inducing characters from all maximal cyclic subgroups.");
+  t := Runtime();
+  icyc := InducedFromAllMaximalCyclicSubgroups(G);
+  mat := EncodeForUTable(UT, icyc);
+  norms := List(mat, c-> ScalarProduct(UT, c, c));
+  SortParallel(norms, mat);
+  Info(InfoUTable, 1, "      ", Length(mat), " characters   ", StringTime(Runtime()-t));
+
+  # Hermite normal form
+  Info(InfoUTable, 1, "Finding Hermite normal form for character values.");
+  t := Runtime();
+  # From now we work with Hermite normal form of the matrix of values.
+  # Since many induced characters have values on smaller oder elements we
+  # reverse the order of columns for the HNF computations.
+  hnf := HermiteNormalFormIntegerMat(List(mat, Reversed));
+  pos := First([1..Length(hnf)], i-> IsZero(hnf[i]));
+  if pos <> fail then
+    hnf := hnf{[1..pos-1]};
+  fi;
+  dim := Length(hnf);
+  piv := List(hnf, a-> First([1..Length(a)], i-> a[i]<>0));
+  Info(InfoUTable, 1, "      dimension ", dim, "   ", StringTime(Runtime()-t));
+
+  # find index
+  Info(InfoUTable, 1, "Computing index of all generalized characters.");
+  t := Runtime();
+  rhnf := List(hnf, Reversed);
+  gram := List(rhnf, a-> []);
+  for i in [1..dim] do
+    for j in [1..i] do
+      c := ScalarProduct(UT, rhnf[i], rhnf[j]);
+      gram[i][j] := c;
+      gram[j][i] := c;
+    od;
+  od;
+  rhnf := 0;
+  # to find the determinant we use that its prime divisors
+  # also divide the order |G|, in this particular case only primes p
+  # with non-cyclic p-elementary subgroups are left 
+  mnc := Reversed(MaximalNonCyclicElementarySubgroups(G));
+  ps := Set(List(mnc, a-> a[2]));
+  index := 1;
+  for p in ps do
+    e := Sum(ElementaryDivisorsPPartRk(gram, p, dim))/2;
+    index := index * p^e;
+  od;
+  Info(InfoUTable, 1, "      index ", index, "   ", StringTime(Runtime()-t));
+
+  # from now we just compute with the pivot columns of hnf
+  hnf := List(hnf, a-> a{piv});
+
+  # we collect useful vectors here
+  useful := [];
+  # using trivial and natural characters
+  Info(InfoUTable, 1, "Adding trivial and natural characters.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, NaturalCharacters(G)));
+  for v in vs do
+    new := AddVectorToHNF(hnf, [1..dim], Reversed(v){piv});
+    if new > 1 then
+      ind := ind * new;
+      Add(useful, v);
+    fi;
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # And some cheap characters from power maps
+  Info(InfoUTable, 1, "Adding cheap characters from power maps.");
+  ind := 1;
+  t := Runtime();
+  vs := EncodeForUTable(UT, [1+0*[1..ncl]]);
+  Append(vs, EncodeForUTable(UT, SmallPowerMapCharacters(G)));
+  for v in vs do
+    new := AddVectorToHNF(hnf, [1..dim], Reversed(v){piv});
+    if new > 1 then
+      ind := ind * new;
+      Add(useful, v);
+    fi;
+  od;
+  index := index/ind;
+  Info(InfoUTable, 1, "      found index ", ind, "   ", StringTime(Runtime()-t));
+  if index = 1 then
+    return finalize();
+  fi;
+
+  # Now we need non-cyclic elementary subgroups
+  Info(InfoUTable, 1, "Considering maximal non-cyclic elementary subgroups.");
+  # helper for info
+  scen := SizesCentralizers(UT);
+  ords := OrdersClassRepresentatives(UT);
+  op := function(i, p)
+    local sz, res;
+    sz := scen[i]/p;
+    res := 1;
+    while IsInt(sz) do
+      res := res*p;
+      sz := sz/p;
+    od;
+    return res;
+  end;
+
+  # We know that we only need to look at p-elementary subgroups when
+  # p is still dividing the current index.
+  # Also, we stop checking new virtual characters from a p-elementary
+  # subgroup when p is no longer dividing the index (can be very useful
+  # when something close to the Sylow-p-subgroups with maybe many characters
+  # are considered towards the end).
+  for i in [1..Length(mnc)] do
+    j := mnc[i][1];
+    p := mnc[i][2];
+    # not needed if p does not divide index
+    if index mod p = 0 then
+      Info(InfoUTable, 1, "Inducing characters from elementary ", [j,p],
+                " |C|=",ords[j]," |P|=",op(j, p));
+      t := Runtime();
+      idat := InductionDataFromElementaryUTable(UT, j, p);
+      Info(InfoUTable, 1, "      ", StringTime(Runtime()-t));
+      t := Runtime();
+      next := idat.next;
+      oldindex := index;
+      vs := Set(next());
+      while vs <> fail and index mod p = 0 do
+        ind := 1;
+        for v in vs do
+          new := AddVectorToHNF(hnf, [1..dim], Reversed(v){piv});
+          if new > 1 then
+            ind := ind * new;
+            Add(useful, v);
+          fi;
+        od;
+        index := index/ind;
+        vs := next();
+      od;
+      Info(InfoUTable, 1, "      found index ", oldindex/index, " of ", 
+                          oldindex, "   ", StringTime(Runtime()-t));
+      if index = 1 then
+        return finalize();
+      fi;
+    fi;
+  od;
+end;
